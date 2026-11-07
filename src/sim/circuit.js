@@ -1,7 +1,7 @@
 // 直流电路：端子-节点 + 节点电压法（Norton 等效，无理想电压源奇异问题）
 // 约定：端子 a 为 −，b 为 +（电池），电流正方向 a→b
 export const CIRCUIT_TYPES = [
-  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire']
+  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid']
 
 export function pins(o) {
   if (o.type === 'junction') return [{ x: o.x, y: o.y }, { x: o.x, y: o.y }]   // 接点：两端重合于圆心

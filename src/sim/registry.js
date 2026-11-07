@@ -146,32 +146,50 @@ export const registry = {
   },
   solenoid: {
     name: '通电螺线管',
-    defaults: () => ({ len: 160, angle: 0, I: 2, n: 8 }),
+    defaults: () => ({ len: 160, angle: 0, I: 2, n: 8, hel: 1, R: 2 }),
     fields: [
       { key: 'len', label: '长度', unit: 'px', min: 60, max: 400, step: 10 },
       { key: 'angle', label: '方向（N 朝）', unit: '°', min: 0, max: 330, step: 30 },
-      { key: 'I', label: '电流 I', unit: 'A', min: 0, max: 10, step: 0.5 },
+      { key: 'I', label: '电流 I（未接电路时）', unit: 'A', min: -10, max: 10, step: 0.5 },
       { key: 'n', label: '匝数密度', unit: '匝/cm', min: 1, max: 20, step: 1 },
+      { key: 'hel', label: '螺旋方向（右手=1）', unit: '', min: -1, max: 1, step: 2 },
+      { key: 'R', label: '线圈电阻', unit: 'Ω', min: 0.5, max: 50, step: 0.5 },
     ],
     body: null,
-    overlay: (ctx, c) => {
+    overlay: (ctx, c, all) => {
       const len = c.props.len ?? 160, a = ((c.props.angle ?? 0) * Math.PI) / 180
-      const on = (c.props.I ?? 2) > 0.01
+      const hel = c.props.hel ?? 1
+      // 接入电路 → 取解算电流（带方向）；否则用面板 I
+      let I = c.props.I ?? 2
+      if (all && all.some(o => o.type === 'battery')) {
+        try {
+          const res = solve(all)
+          const cur = res.currents.get(c.id)
+          if (cur != null) { c.props._I = cur; I = cur }
+        } catch { /* 忽略 */ }
+      }
+      const on = Math.abs(I) > 0.01
       ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(a)
       const L = len / 2
+      // 引线：两端各画一小段水平线接入
       ctx.strokeStyle = on ? '#facc15' : '#64748b'
-      ctx.lineWidth = 2
+      ctx.lineWidth = 2 * LW
+      ctx.beginPath(); ctx.moveTo(-L - 12, 0); ctx.lineTo(-L, 0); ctx.moveTo(L, 0); ctx.lineTo(L + 12, 0); ctx.stroke()
+      // 线圈弧：hel=1 时弧朝上（右手螺旋 N 在轴向正方向），hel=-1 弧朝下
       const n = Math.max(6, Math.round(len / 14))
       for (let k = 0; k < n; k++) {
         const x = -L + (k + 0.5) * (len / n)
-        ctx.beginPath(); ctx.arc(x, 0, 9, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke()
+        ctx.beginPath()
+        if (hel >= 0) ctx.arc(x, 0, 9, -Math.PI * 0.5, Math.PI * 0.5)
+        else ctx.arc(x, 0, 9, Math.PI * 0.5, Math.PI * 1.5)
+        ctx.stroke()
       }
-      ctx.setLineDash([5, 4]); ctx.strokeStyle = '#475569'; ctx.lineWidth = 1
+      ctx.setLineDash([5, 4]); ctx.strokeStyle = '#475569'; ctx.lineWidth = 1 * LW
       ctx.beginPath(); ctx.moveTo(-L - 14, 0); ctx.lineTo(L + 14, 0); ctx.stroke()
       ctx.setLineDash([])
-      ctx.fillStyle = '#f87171'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'
+      ctx.fillStyle = '#f87171'; ctx.font = `${11 * LW}px sans-serif`; ctx.textAlign = 'center'
       if (on) ctx.fillText('N', L + 22, 4)
-      if (on) { ctx.fillStyle = '#facc15'; ctx.fillText('I=' + (c.props.I ?? 2).toFixed(1) + 'A', 0, 22) }
+      if (on) { ctx.fillStyle = '#facc15'; ctx.fillText('I=' + Math.abs(I).toFixed(2) + 'A', 0, 22) }
       ctx.restore()
     },
   },
