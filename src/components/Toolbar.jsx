@@ -1,7 +1,7 @@
 export default function Toolbar({
   running, onPlay, onPause, onReset, onClear, showForces, onToggleForces,
   onUndo, onRedo, canUndo, canRedo, onHelp, gravity, onToggleGravity,
-  speed, onSpeed, tool, onToolSelect,
+  speed, onSpeed, tool, onToolSelect, showB, onToggleB,
 }) {
   return (
     <div className="toolbar">
