@@ -160,20 +160,22 @@ export function useSim() {
     if (!o) return
     const now = Date.now()
     if (now - lastPropRef.current > 800) { pushHistory(); lastPropRef.current = now }
+    const prevLen = o.props.len
     o.props[key] = value
     // 线段元件调长度：若某端已吸附到其他端子，则保持该端不动，沿另一端伸长
     if (key === 'len' && CIRCUIT_TYPES.includes(o.type)) {
       const a = ((o.props.angle ?? 0) * Math.PI) / 180
       const ux = Math.cos(a), uy = Math.sin(a)
       const others = objsRef.current.filter(t => t.id !== o.id)
+      const L0 = prevLen ?? 90
       const attached = [-1, 1].map(sg => {
-        const ex = o.x + sg * ux * (o.props.len ?? 90) / 2, ey = o.y + sg * uy * (o.props.len ?? 90) / 2
+        const ex = o.x + sg * ux * L0 / 2, ey = o.y + sg * uy * L0 / 2
         return !!snapToPin(ex, ey, others, 8)
       })
       if (attached[0] !== attached[1]) {   // 恰有一端依附
         const sg = attached[0] ? -1 : 1    // 固定端符号；自由端 = -sg
         // 新中点：固定端位置不变，自由端沿原方向伸长 value
-        const fx = o.x - sg * ux * (o.props.len ?? 90) / 2, fy = o.y - sg * uy * (o.props.len ?? 90) / 2 // 固定端坐标
+        const fx = o.x - sg * ux * L0 / 2, fy = o.y - sg * uy * L0 / 2 // 固定端坐标（旧长度算）
         o.x = fx + sg * ux * value / 2
         o.y = fy + sg * uy * value / 2
         if (o.home) { o.home.x = o.x; o.home.y = o.y }
