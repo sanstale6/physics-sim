@@ -99,6 +99,18 @@ if (rheo) {
   console.log('errors after select:', errors.length)
   for (const e of errors.slice(0, 4)) console.log('---', e.split('\n').slice(0, 6).join('\n'))
 }
+// —— 复现：放置金属导轨 ——
+const railBtn = palBtns.find(b => b.textContent.includes('金属导轨'))
+console.log('rail button:', !!railBtn)
+if (railBtn) {
+  railBtn.dispatchEvent(new win.MouseEvent('pointerdown', { bubbles: true }))
+  await sleep(80)
+  pe('pointerdown', 400, 330)
+  pe('pointerup', 400, 330)
+  await sleep(250)
+  console.log('errors after rail place:', errors.length)
+  for (const e of errors.slice(0, 3)) console.log('---RAIL---', e.split('\n').slice(0, 6).join('\n'))
+}
 process.exit(0)
 
 for (const e of errors.slice(0, 6)) console.log('---', e.split('\n').slice(0, 3).join(' | '))

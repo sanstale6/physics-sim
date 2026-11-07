@@ -109,7 +109,10 @@ export default function SimCanvas(props) {
       const w = worldOf(s)
       const o = hitTest(P.current.sim.objsRef.current, w.x, w.y, (e.pointerType === 'touch' ? 18 : 6) / view.scale)
       tapObj = o
-      if (o) {
+      // 无限大场（全屏 uniformB/uniformE）不当作「抓住元件」：单指仍平移画布，轻点仍可选中
+      const infiniteField = o && (o.type === 'uniformB' || o.type === 'uniformE')
+        && ((o.props.w ?? 0) >= 3200 || (o.props.h ?? 0) >= 3200)
+      if (o && !infiniteField) {
         const bp = posOf(o)
         objDrag = { id: o.id, dx: bp.x - w.x, dy: bp.y - w.y, sx: s.x, sy: s.y, moved: false }
         pan = null
@@ -183,7 +186,8 @@ export default function SimCanvas(props) {
           if (placing) {
             const w = worldOf(s)
             P.current.onPlace?.(snap(w.x), snap(w.y))
-          } else P.current.onSelectEmpty?.()
+          } else if (tapObj) P.current.onTap?.(tapObj.id)   // 全屏场轻点也能选中调参
+          else P.current.onSelectEmpty?.()
         }
       } else if (mode === 'press' || mode === 'drag') {
         if (!movedByDrag) {
@@ -303,7 +307,7 @@ export default function SimCanvas(props) {
           registry[o.type]?.overlay?.(ctx, o, objs)   // pulley 有 body 也画自定义轮体外观
         }
         else registry[o.type]?.overlay?.(ctx, o, objs)
-        if (o.id === P.current.selectedId && !o.body) {
+        if (o.id === P.current.selectedId && !o.body && o.type !== 'uniformB' && o.type !== 'uniformE') {
           const p = o.props || {}
           const bw = p.w ?? 64, bh = p.h ?? 64
           ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = 'rgba(56,189,248,.8)'; ctx.lineWidth = 1.5 / view.scale
