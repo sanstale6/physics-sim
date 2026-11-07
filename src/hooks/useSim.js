@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Matter from 'matter-js'
 import { createWorld, applyForces, postStep, VEL_SCALE, GRAV, gravityState } from '../sim/engine.js'
 import { registry } from '../sim/registry.js'
-import { snapToPin, snapJunction, CIRCUIT_TYPES } from '../sim/circuit.js'
+import { snapToPin, snapJunction, CIRCUIT_TYPES, pins } from '../sim/circuit.js'
 
 const LINK_TYPES = new Set(['rope', 'spring', 'pulley', 'pendulum'])
 
@@ -168,19 +168,33 @@ export function useSim() {
       const ux = Math.cos(a), uy = Math.sin(a)
       const others = objsRef.current.filter(t => t.id !== o.id)
       const L0 = prevLen ?? 90
+      // 端点是否已「接上东西」：吸到别的端子，或落在别的元件线段上
+      const onSeg = (ex, ey) => {
+        for (const t of others) {
+          if (!CIRCUIT_TYPES.includes(t.type)) continue
+          const ps = pins(t)
+          if (ps.length !== 2) continue
+          const dx = ps[1].x - ps[0].x, dy = ps[1].y - ps[0].y
+          const L2 = dx * dx + dy * dy
+          if (L2 < 1) continue
+          let tt = ((ex - ps[0].x) * dx + (ey - ps[0].y) * dy) / L2
+          tt = Math.max(0, Math.min(1, tt))
+          if (Math.hypot(ex - (ps[0].x + tt * dx), ey - (ps[0].y + tt * dy)) < 10) return true
+        }
+        return false
+      }
       const attached = [-1, 1].map(sg => {
         const ex = o.x + sg * ux * L0 / 2, ey = o.y + sg * uy * L0 / 2
-        return !!snapToPin(ex, ey, others, 8)
+        return !!snapToPin(ex, ey, others, 10) || onSeg(ex, ey)
       })
-      if (attached[0] !== attached[1]) {   // 恰有一端依附
-        const sg = attached[0] ? -1 : 1    // 固定端符号；自由端 = -sg
-        // 新中点：固定端位置不变，自由端沿原方向伸长 value
-        const fx = o.x - sg * ux * L0 / 2, fy = o.y - sg * uy * L0 / 2 // 固定端坐标（旧长度算）
-        o.x = fx + sg * ux * value / 2
-        o.y = fy + sg * uy * value / 2
+      if (attached[0] !== attached[1]) {   // 恰有一端依附 → 该端固定，只朝另一端伸长
+        const keep = attached[0] ? -1 : 1  // 依附端方向（-1 或 +1）
+        // 依附端坐标 F = 中心 + keep*u*L0/2，伸长后新中心 = F - keep*u*value/2
+        o.x += keep * ux * (L0 - value) / 2
+        o.y += keep * uy * (L0 - value) / 2
         if (o.home) { o.home.x = o.x; o.home.y = o.y }
       }
-      // 两端都依附或都自由 → 正常居中伸长，不做特殊处理
+      // 两端都依附或都自由 → 居中伸长，不做特殊处理
     }
     if (key === 'angle') {
       o.props.angle = value
