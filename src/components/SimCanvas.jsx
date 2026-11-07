@@ -429,22 +429,23 @@ function drawFieldLines(ctx, o, scale, comps) {
   ctx.save()
   ctx.strokeStyle = 'rgba(148,163,184,.4)'
   ctx.lineWidth = 1 / scale
+  const Spt = { x: o.x - ux * len / 2, y: o.y - uy * len / 2 }
   for (let k = 0; k < nLines; k++) {
-    // 出射角：从 N 极向外均匀扇形（避开轴向正后方）
-    const spread = -Math.PI * 0.85 + (k / (nLines - 1)) * Math.PI * 1.7
-    let px = Npt.x + Math.cos(ang + spread) * 6
-    let py = Npt.y + Math.sin(ang + spread) * 6
+    // 出射角：全扇形（含轴向正前方与两侧），轴向两条正是 N 极两端必有的磁感线
+    const spread = -Math.PI + (k / (nLines - 1)) * Math.PI * 2
+    let px = Npt.x + Math.cos(ang + spread) * 10
+    let py = Npt.y + Math.sin(ang + spread) * 10
     ctx.beginPath(); ctx.moveTo(px, py)
     let hitS = false
-    for (let step = 0; step < 220 && !hitS; step++) {
+    for (let step = 0; step < 260 && !hitS; step++) {
       const f = fieldAt(px, py, comps)
       if (f.mag < 1e-3) break
       const h = Math.min(6, 60 / (f.mag + 2))   // 自适应步长
       px += f.bx / f.mag * h
       py += f.by / f.mag * h
       ctx.lineTo(px, py)
-      // 到达 S 极附近
-      if (Math.hypot(px - (o.x - ux * len / 2), py - (o.y - uy * len / 2)) < 10) hitS = true
+      if (Math.hypot(px - Spt.x, py - Spt.y) < 12) hitS = true          // 到达 S 极
+      else if (Math.hypot(px - Npt.x, py - Npt.y) < 8) break            // 折回 N 极（数值误差兜底）
     }
     ctx.stroke()
     // 中途箭头（取路径 1/3 处的切向）
@@ -452,9 +453,9 @@ function drawFieldLines(ctx, o, scale, comps) {
   // 箭头：在场线中段画。简化：对每条线重走一遍到 1/3 位置画箭头
   ctx.fillStyle = 'rgba(148,163,184,.55)'
   for (let k = 0; k < nLines; k++) {
-    const spread = -Math.PI * 0.85 + (k / (nLines - 1)) * Math.PI * 1.7
-    let px = Npt.x + Math.cos(ang + spread) * 6
-    let py = Npt.y + Math.sin(ang + spread) * 6
+    const spread = -Math.PI + (k / (nLines - 1)) * Math.PI * 2
+    let px = Npt.x + Math.cos(ang + spread) * 10
+    let py = Npt.y + Math.sin(ang + spread) * 10
     let trav = 0, total = 0
     const pts = []
     for (let step = 0; step < 220; step++) {

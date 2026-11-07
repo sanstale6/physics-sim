@@ -10,7 +10,7 @@ import MomentumPanel from './components/MomentumPanel.jsx'
 import Help from './components/Help.jsx'
 import { useSim } from './hooks/useSim.js'
 import { presets } from './sim/presets.js'
-import { CIRCUIT_TYPES, placeCircuit } from './sim/circuit.js'
+import { CIRCUIT_TYPES, placeCircuit, autoParallel } from './sim/circuit.js'
 import { registry } from './sim/registry.js'
 import { snapToIncline } from './sim/place.js'
 import { sceneFromHash } from './sim/share.js'
@@ -51,8 +51,13 @@ export default function App() {
     if (snap) { px = snap.x; py = snap.y; angle = snap.angle }
     else if (CIRCUIT_TYPES.includes(tool)) {
       const d = registry[tool].defaults()
-      const t = placeCircuit(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
-      px = t.x; py = t.y
+      // 并联自动成形：与既有节点对正交搭接 → 平移对齐成并联
+      const par = autoParallel(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
+      if (par) { px = par.x; py = par.y }
+      else {
+        const t = placeCircuit(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
+        px = t.x; py = t.y
+      }
     }
     const id = sim.add(tool, px, py, undefined, angle)
     setSelected(id); setShowInspector(true)

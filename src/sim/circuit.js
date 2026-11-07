@@ -179,6 +179,62 @@ export function snapToPin(x, y, objs, maxDist = 26) {
   return best
 }
 
+// 并联自动成形：新放置的线段元件若与两个既有节点近似「正交搭接」
+// （元件两端分别在两节点的外侧、且与节点连线大致垂直、距离不远），自动改为 U 形三段并联。
+// 返回 { x, y, angle } 或 null（不适用）。
+export function autoParallel(x, y, len, angle, objs, maxGap = 260) {
+  const a = (angle * Math.PI) / 180
+  const ux = Math.cos(a), uy = Math.sin(a)
+  // 元件两端
+  const e1 = { x: x - ux * len / 2, y: y - uy * len / 2 }
+  const e2 = { x: x + ux * len / 2, y: y + uy * len / 2 }
+  // 收集所有电路端子
+  const pinsAll = []
+  for (const o of objs) {
+    if (!CIRCUIT_TYPES.includes(o.type)) continue
+    pins(o).forEach(q => pinsAll.push(q))
+  }
+  // 对每对端子（视为节点）：元件轴大致垂直于节点连线，两端分别在连线两侧外
+  let best = null, bestScore = Infinity
+  for (let i = 0; i < pinsAll.length; i++) {
+    for (let j = i + 1; j < pinsAll.length; j++) {
+      const n1 = pinsAll[i], n2 = pinsAll[j]
+      const dx = n2.x - n1.x, dy = n2.y - n1.y
+      const d = Math.hypot(dx, dy)
+      if (d < 24 || d > maxGap) continue
+      // 节点连线方向的单位向量
+      const nx = dx / d, ny = dy / d
+      // 元件轴与节点连线夹角接近 90°？
+      const dot = Math.abs(ux * nx + uy * ny)
+      if (dot > 0.3) continue   // 允许 72°~90°
+      // 两端投影：要求元件两端分别越过 n1、n2（在连线方向上覆盖它们）
+      const t1 = (e1.x - n1.x) * nx + (e1.y - n1.y) * ny
+      const t2 = (e2.x - n1.x) * nx + (e2.y - n1.y) * ny
+      const tmin = Math.min(t1, t2), tmax = Math.max(t1, t2)
+      // 覆盖 [0, d]，且略超出（外侧 ≥12px 以便 U 形引线有落脚点）
+      if (!(tmin < -12 && tmax > d + 12)) continue
+      // 元件到节点连线距离不太大（垂直方向偏移）
+      const cross = ((x - n1.x) * ny - (y - n1.y) * nx)
+      const off = Math.abs(cross)
+      if (off > 200) continue
+      const score = off + Math.abs((tmin + 12)) + Math.abs(tmax - d - 12)
+      if (score < bestScore) {
+        bestScore = score
+        best = { n1, n2, nx, ny, d, t1, t2 }
+      }
+    }
+  }
+  if (!best) return null
+  // U 形：保持元件中心与角度不变即可——两端已在节点外侧，
+  // 由 clusterNodes 的「线段中段吸附」把节点并进元件两端的引脚延伸。
+  // 但端子未精确落在节点上 → 直接平移元件使两端引脚落点尽量贴近节点延长线：
+  // 计算元件轴与节点连线中点的垂足，把元件中心对齐到中点法向偏移保持不变
+  const mx = (best.n1.x + best.n2.x) / 2, my = (best.n1.y + best.n2.y) / 2
+  // 元件中心到中点的横向偏移保持，纵向对齐中点
+  const along = (x - mx) * best.nx + (y - my) * best.ny
+  return { x: x - along * best.nx, y: y - along * best.ny, angle, parallel: true }
+}
+
 // 新元件放置：若附近有端子，则让新元件的一个端子落在该点上
 // 接点拖动吸附：优先吸到附近端子（26px），否则吸到导线/元件线段上的投影点（含中段，20px）
 export function snapJunction(x, y, objs, maxDist = 26) {

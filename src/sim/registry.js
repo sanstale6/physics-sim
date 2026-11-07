@@ -680,7 +680,8 @@ export const registry = {
       { key: 'angle', label: '方向（0°=N朝右）', unit: '°', min: 0, max: 330, step: 30 },
     ],
     // 简化模型：两个磁荷（N 在 +len/2 沿轴，S 在 −len/2），对带电运动电荷按 B∝1/r² 近似施加力
-    body: (x, y, p) => ({ type: 'rectangle', w: p.len ?? 120, h: 22,
+    body: (x, y, p) => ({ type: 'rotRect', w: p.len ?? 120, h: 22,
+      angle: ((p.angle ?? 0) * Math.PI) / 180,
       options: { isStatic: true, friction: 0 }, label: 'magnet' }),
     overlay: (ctx, c) => {
       const len = c.props.len ?? 120, a = ((c.props.angle ?? 0) * Math.PI) / 180
