@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Matter from 'matter-js'
 import { createWorld, applyForces, postStep, VEL_SCALE, GRAV, gravityState } from '../sim/engine.js'
 import { registry } from '../sim/registry.js'
+import { snapToPin, CIRCUIT_TYPES } from '../sim/circuit.js'
 
 const LINK_TYPES = new Set(['rope', 'spring', 'pulley', 'pendulum'])
 
@@ -190,6 +191,17 @@ export function useSim() {
   const dragTo = useCallback((id, x, y) => {
     const o = objsRef.current.find(o => o.id === id)
     if (!o) return
+    // 电路线段元件：拖动时若附近（26px）有其他端子，则平移使该端子精确对齐（保持连接不断）
+    if (CIRCUIT_TYPES.includes(o.type) && o.type !== 'junction') {
+      const len = o.props.len ?? 90
+      const a = ((o.props.angle ?? 0) * Math.PI) / 180
+      const dx = (Math.cos(a) * len) / 2, dy = (Math.sin(a) * len) / 2
+      const others = objsRef.current.filter(t => t.id !== id)
+      for (const [sx, sy] of [[-dx, -dy], [dx, dy]]) {   // 两端各自尝试吸附
+        const snap = snapToPin(x + sx, y + sy, others)
+        if (snap) { x = snap.x - sx; y = snap.y - sy; break }
+      }
+    }
     o.x = x; o.y = y
     o.home = { x, y, angle: o.home?.angle ?? 0 }   // 拖到新位置后，重置就回到这里
     const b = o.body

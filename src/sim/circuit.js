@@ -1,8 +1,10 @@
 // 直流电路：端子-节点 + 节点电压法（Norton 等效，无理想电压源奇异问题）
 // 约定：端子 a 为 −，b 为 +（电池），电流正方向 a→b
-export const CIRCUIT_TYPES = ['battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire']
+export const CIRCUIT_TYPES = [
+  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire']
 
 export function pins(o) {
+  if (o.type === 'junction') return [{ x: o.x, y: o.y }, { x: o.x, y: o.y }]   // 接点：两端重合于圆心
   const len = o.props.len ?? 90
   const a = ((o.props.angle ?? 0) * Math.PI) / 180
   const dx = (Math.cos(a) * len) / 2, dy = (Math.sin(a) * len) / 2
@@ -13,6 +15,7 @@ export function resistance(o) {
   const p = o.props ?? o   // 兼容 Inspector 传入的扁平 {type,...props} 对象
   switch (o.type) {
     case 'wire': return 1e-3
+    case 'junction': return 1e-3
     case 'ammeter': return 1e-2
     case 'voltmeter': return 1e6
     case 'switch': return p.closed ? 5e-3 : 1e12

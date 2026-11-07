@@ -88,7 +88,7 @@ export default function App() {
         if (selected != null) { e.preventDefault(); sim.remove(selected); setSelected(null); setShowInspector(false) }
         return
       }
-      if (e.key === 'Escape') { setShowInspector(false); return }
+      if (e.key === 'Escape') { setShowInspector(false); pickTool('select'); return }
       if (e.key === 'f' || e.key === 'F') setShowForces(v => !v)
       const step = e.shiftKey ? 1 : 10
       const arrow = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key]
@@ -100,7 +100,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [sim.undo, sim.redo, sim.remove, sim.setRunning, sim.running, selected])
+  }, [sim.undo, sim.redo, sim.remove, sim.setRunning, sim.running, selected, pickTool])
 
   const sel = selected != null ? sim.getObject(selected) : null
   const selBody = selected != null ? sim.objsRef.current.find(o => o.id === selected)?.body : null

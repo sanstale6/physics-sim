@@ -4,8 +4,8 @@ import { presets } from '../sim/presets.js'
 
 const GROUPS = [
   ['力学', ['select', 'particle', 'block', 'ball', 'incline', 'ground', 'track', 'conveyor', 'constantForce', 'spring', 'rope', 'pulley', 'pendulum']],
-  ['电磁', ['charge', 'uniformE', 'uniformB']],
-  ['电路', ['battery', 'wire', 'resistor', 'rheostat', 'bulb', 'switch', 'ammeter', 'voltmeter']],
+  ['电磁', ['charge', 'uniformE', 'uniformB', 'rail', 'magnet']],
+  ['电路', ['battery', 'wire', 'junction', 'resistor', 'rheostat', 'bulb', 'switch', 'ammeter', 'voltmeter']],
   ['光学', ['lightSource', 'mirror', 'lens', 'screen']],
 ]
 const BY_TYPE = Object.fromEntries(GROUPS.flatMap(([, ts]) => ts.map(t => [t, true])))

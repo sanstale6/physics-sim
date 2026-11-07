@@ -1,10 +1,11 @@
 export default function Toolbar({
   running, onPlay, onPause, onReset, onClear, showForces, onToggleForces,
   onUndo, onRedo, canUndo, canRedo, onHelp, gravity, onToggleGravity,
-  speed, onSpeed,
+  speed, onSpeed, tool, onToolSelect,
 }) {
   return (
     <div className="toolbar">
+      <button className={tool === 'select' ? 'active' : ''} onClick={onToolSelect} title="选择模式 (Esc)" aria-label="选择模式">☝ 选择</button>
       <button onClick={onUndo} disabled={!canUndo} title="撤销 (Ctrl+Z)" aria-label="撤销">↶</button>
       <button onClick={onRedo} disabled={!canRedo} title="重做 (Ctrl+Shift+Z)" aria-label="重做">↷</button>
       {running

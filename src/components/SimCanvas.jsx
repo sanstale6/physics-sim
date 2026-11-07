@@ -296,7 +296,10 @@ export default function SimCanvas(props) {
 
       for (const o of objs) {
         if (o.type === 'incline') drawIncline(ctx, o, P.current.selectedId, view.scale)
-        else if (o.body) drawBody(ctx, o, P.current.selectedId, view.scale)
+        else if (o.body) {
+          if (o.type !== 'pulley') drawBody(ctx, o, P.current.selectedId, view.scale)
+          registry[o.type]?.overlay?.(ctx, o, objs)   // pulley 有 body 也画自定义轮体外观
+        }
         else registry[o.type]?.overlay?.(ctx, o, objs)
         if (o.id === P.current.selectedId && !o.body) {
           const p = o.props || {}

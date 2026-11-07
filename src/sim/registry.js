@@ -117,66 +117,98 @@ export const registry = {
       ctx.restore()
     },
   },
+  rail: {
+    name: '金属导轨',
+    defaults: () => ({ len: 360, gap: 120, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 120, max: 1200, step: 10 },
+      { key: 'gap', label: '轨距', unit: 'px', min: 40, max: 400, step: 5 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    // 两根静态杆：gap 上沿一根、下沿一根（中间空，供导体棒滑动）
+    body: (x, y, p) => ({ type: 'vertices', vs: [
+      { x: -p.len / 2, y: -p.gap / 2 - 6 }, { x: p.len / 2, y: -p.gap / 2 - 6 },
+      { x: p.len / 2, y: -p.gap / 2 + 6 }, { x: -p.len / 2, y: -p.gap / 2 + 6 },
+      { x: -p.len / 2, y: p.gap / 2 - 6 }, { x: p.len / 2, y: p.gap / 2 - 6 },
+      { x: p.len / 2, y: p.gap / 2 + 6 }, { x: -p.len / 2, y: p.gap / 2 + 6 },
+    ], options: { isStatic: true, friction: 0 }, label: 'rail' }),
+    overlay: (ctx, c) => {
+      const { len, gap } = c.props
+      const x = c.x, y = c.y, a = ((c.props.angle ?? 0) * Math.PI) / 180
+      ctx.save()
+      ctx.translate(x, y); ctx.rotate(a)
+      ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 2.2 * LW
+      ctx.beginPath()
+      ctx.moveTo(-len / 2, -gap / 2); ctx.lineTo(len / 2, -gap / 2)
+      ctx.moveTo(-len / 2, gap / 2); ctx.lineTo(len / 2, gap / 2); ctx.stroke()
+      // 导电斜纹
+      ctx.lineWidth = 1 * LW; ctx.strokeStyle = 'rgba(250,204,21,.45)'
+      for (let i = -len / 2 + 12; i < len / 2 - 4; i += 22) {
+        ctx.beginPath(); ctx.moveTo(i, -gap / 2 - 5); ctx.lineTo(i + 8, -gap / 2 + 5)
+        ctx.moveTo(i, gap / 2 - 5); ctx.lineTo(i + 8, gap / 2 + 5); ctx.stroke()
+      }
+      ctx.restore(); ctx.lineWidth = 1 * LW
+    },
+  },
   conveyor: {
     name: '传送带',
     defaults: () => ({ len: 320, v: 2 }),
     fields: [
-      { key: 'len', label: '长度', unit: 'px', min: 120, max: 900, step: 10 },
+      { key: 'len', label: '长度', unit: 'px', min: 120, max: 1200, step: 10 },
       { key: 'v', label: '带速（正=向右）', unit: 'm/s', min: -8, max: 8, step: 0.5 },
     ],
     body: (x, y, p) => ({ type: 'rectangle', w: p.len ?? 320, h: 16,
       options: { isStatic: true, friction: 0 }, label: 'conveyor' }),
     overlay: (ctx, c) => {
       const len = c.props.len ?? 320, v = c.props.v ?? 0
-      const x = c.x, y = c.y, rr = 11, half = len / 2
-      const l = x - half + rr, rt = x + half - rr   // 滚筒圆心
+      const x = c.x, y = c.y, rr = 14, half = len / 2
+      const l = x - half + rr, rt = x + half - rr
       const dir = Math.sign(v) || 1
       const t = performance.now() / 1000
       ctx.save()
       ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-      // 皮带外轮廓（两条带面 + 两端半圆）——一条闭合路径，更像真题里的传动带
-      ctx.strokeStyle = 'rgba(219,230,245,.9)'; ctx.lineWidth = 1.4 * LW
+      // 支架腿先画（在带体后面）
+      ctx.strokeStyle = 'rgba(139,148,158,.75)'; ctx.lineWidth = 1.3 * LW
+      for (const lx of [x - half * 0.32, x + half * 0.32]) {
+        ctx.beginPath(); ctx.moveTo(lx, y + rr); ctx.lineTo(lx, y + rr + 18)
+        ctx.moveTo(lx - 8, y + rr + 18); ctx.lineTo(lx + 8, y + rr + 18); ctx.stroke()
+      }
+      // 皮带轮廓（上带面/下带面 + 两端半圆弧），带体加厚更醒目
+      ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.6 * LW
       ctx.beginPath()
       ctx.moveTo(l, y - rr); ctx.lineTo(rt, y - rr)
       ctx.arc(rt, y, rr, -Math.PI / 2, Math.PI / 2)
       ctx.lineTo(l, y + rr)
       ctx.arc(l, y, rr, Math.PI / 2, Math.PI * 3 / 2)
       ctx.closePath(); ctx.stroke()
-      // 内部浅填充
-      ctx.fillStyle = 'rgba(56,189,248,.05)'; ctx.fill()
-      // 滚筒：填充圆 + 4 辐条 + 中心轴点（转动相位随带速）
-      const ph = (t * v * 12) % (Math.PI * 2)
+      ctx.fillStyle = 'rgba(56,189,248,.06)'; ctx.fill()
+      // 滚筒：实心感（深填充+青描边）+ 4 辐条 + 轴点，转动相位随带速
+      const ph = (t * v * 10) % (Math.PI * 2)
       for (const cx of [l, rt]) {
-        ctx.beginPath(); ctx.arc(cx, y, rr - 2.5, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(56,189,248,.12)'; ctx.fill()
-        ctx.strokeStyle = 'rgba(56,189,248,.95)'; ctx.lineWidth = 1.2 * LW; ctx.stroke()
-        ctx.lineWidth = 1 * LW
+        ctx.beginPath(); ctx.arc(cx, y, rr - 3, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(7,11,18,.85)'; ctx.fill()
+        ctx.strokeStyle = 'rgba(56,189,248,.95)'; ctx.lineWidth = 1.4 * LW; ctx.stroke()
+        ctx.lineWidth = 1.1 * LW
         for (let k = 0; k < 4; k++) {
           const a2 = ph + (k * Math.PI) / 2
           ctx.beginPath(); ctx.moveTo(cx, y)
-          ctx.lineTo(cx + Math.cos(a2) * (rr - 2.5), y + Math.sin(a2) * (rr - 2.5)); ctx.stroke()
+          ctx.lineTo(cx + Math.cos(a2) * (rr - 3), y + Math.sin(a2) * (rr - 3)); ctx.stroke()
         }
-        ctx.beginPath(); ctx.arc(cx, y, 1.8, 0, 7); ctx.fillStyle = 'rgba(56,189,248,.95)'; ctx.fill()
+        ctx.beginPath(); ctx.arc(cx, y, 2.2, 0, 7); ctx.fillStyle = '#38bdf8'; ctx.fill()
       }
-      // 带面斜纹花纹（在上下带面上，随带速平移，直观看出转向）
-      ctx.strokeStyle = 'rgba(56,189,248,.6)'; ctx.lineWidth = 1 * LW
-      const step = 24, span = rt - l
+      // 带面花纹：短斜线沿运动方向流动
+      ctx.strokeStyle = 'rgba(56,189,248,.65)'; ctx.lineWidth = 1 * LW
+      const step = 22, span = rt - l
       const off = ((t * Math.abs(v) * 40) % step) * dir
       for (let d = off; Math.abs(d) < span; d += step * dir) {
         const sx = l + d
         if (sx < l || sx > rt) continue
-        ctx.beginPath(); ctx.moveTo(sx, y - rr + 2); ctx.lineTo(sx + 6 * dir, y - rr + 5)
-        ctx.moveTo(sx, y + rr - 2); ctx.lineTo(sx + 6 * dir, y + rr - 5); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(sx, y - rr + 3); ctx.lineTo(sx + 6 * dir, y - rr + 6)
+        ctx.moveTo(sx, y + rr - 3); ctx.lineTo(sx + 6 * dir, y + rr - 6); ctx.stroke()
       }
-      // 支架腿（真题画法：两条短垂线 + 底座）
-      ctx.strokeStyle = 'rgba(139,148,158,.8)'; ctx.lineWidth = 1.2 * LW
-      for (const lx of [x - half * 0.32, x + half * 0.32]) {
-        ctx.beginPath(); ctx.moveTo(lx, y + rr); ctx.lineTo(lx, y + rr + 16)
-        ctx.moveTo(lx - 7, y + rr + 16); ctx.lineTo(lx + 7, y + rr + 16); ctx.stroke()
-      }
-      // 速度标注 + 方向箭头
-      const ax = x - 26 * dir, ay = y - rr - 16
-      ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.4 * LW
+      // 速度箭头 + 标注
+      const ax = x - 26 * dir, ay = y - rr - 18
+      ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.5 * LW
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 46 * dir, ay)
       ctx.moveTo(ax + 46 * dir, ay); ctx.lineTo(ax + 38 * dir, ay - 4)
       ctx.moveTo(ax + 46 * dir, ay); ctx.lineTo(ax + 38 * dir, ay + 4); ctx.stroke()
@@ -227,14 +259,17 @@ export const registry = {
     name: '匀强磁场 B',
     defaults: () => ({ w: 240, h: 180, bz: 2 }),
     fields: [
-      { key: 'w', label: '区域宽', unit: 'px', min: 80, max: 500, step: 10 },
-      { key: 'h', label: '区域高', unit: 'px', min: 80, max: 400, step: 10 },
+      { key: 'w', label: '区域宽', unit: 'px', min: 80, max: 4000, step: 20 },
+      { key: 'h', label: '区域高', unit: 'px', min: 80, max: 4000, step: 20 },
       { key: 'bz', label: '磁感应强度 B（+外/−内）', unit: 'T', min: -20, max: 20, step: 0.1 },
     ],
     body: null,
     overlay: (ctx, c, components) => {
-      const { w, h, bz } = c.props
-      const x = c.x, y = c.y
+      const { h, bz } = c.props
+      const inf = c.props.w >= 3200
+      const cw = ctx.canvas.width, ch = ctx.canvas.height
+      const w = inf ? cw * 3 : c.props.w   // 无限场：按画布 3 倍宽，平移也看不到边
+      const x = inf ? cw / 2 : c.x, y = inf ? ch / 2 : c.y
       ctx.save()
       ctx.strokeStyle = '#7ee787'; ctx.fillStyle = 'rgba(126,231,135,.07)'; ctx.lineWidth = 1.5 * LW
       ctx.fillRect(x - w/2, y - h/2, w, h); ctx.strokeRect(x - w/2, y - h/2, w, h)
@@ -348,6 +383,19 @@ export const registry = {
       ctx.strokeStyle = '#c9d1d9'; ctx.lineWidth = 3 * LW
       ctx.beginPath(); ctx.moveTo(c.x - dx, c.y - dy); ctx.lineTo(c.x + dx, c.y + dy); ctx.stroke()
       ctx.lineWidth = 1 * LW
+    },
+  },
+  junction: {
+    name: '接点',
+    defaults: () => ({ r: 5 }),
+    fields: [],
+    body: null,
+    overlay: (ctx, c) => {
+      ctx.save()
+      ctx.beginPath(); ctx.arc(c.x, c.y, 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#c9d1d9'; ctx.fill()
+      ctx.strokeStyle = 'rgba(219,230,245,.9)'; ctx.lineWidth = 1.2 * LW; ctx.stroke()
+      ctx.restore(); ctx.lineWidth = 1 * LW
     },
   },
   battery: {
@@ -473,33 +521,129 @@ export const registry = {
       const rad = c.props.r ?? 22
       ctx.save()
       ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-      // 绳：从物体到轮缘切点附近（沿径向留在轮缘上，不插进圆心）
-      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.5 * LW
+      // 绳（黄色，画在轮体下面）：从物体到轮缘
+      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.6 * LW
       if (ends) for (const end of ends) {
         const b = end.body.position
         const dx = b.x - c.x, dy = b.y - c.y, d = Math.hypot(dx, dy) || 1
-        const tx = c.x + dx / d * rad, ty = c.y + dy / d * rad   // 轮缘上的点
-        ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(tx, ty); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(b.x, b.y)
+        ctx.lineTo(c.x + dx / d * rad, c.y + dy / d * rad); ctx.stroke()
       }
-      // 轮体：外圈 + 内圈 + 6 根轮辐 + 中心轴（真题滑轮画法）
-      ctx.strokeStyle = 'rgba(219,230,245,.9)'; ctx.lineWidth = 1.4 * LW
-      ctx.beginPath(); ctx.arc(c.x, c.y, rad, 0, Math.PI * 2); ctx.stroke()
-      ctx.lineWidth = 1 * LW
-      ctx.beginPath(); ctx.arc(c.x, c.y, rad * 0.72, 0, Math.PI * 2); ctx.stroke()
-      const spin = ends ? 0 : 0   // 定滑轮不转，静止画
+      // 轮体：深色填充轮 + 亮外圈 + 6 轮辐 + 大中心轴
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(7,11,18,.9)'; ctx.fill()
+      ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.6 * LW; ctx.stroke()
+      ctx.lineWidth = 1.1 * LW
+      ctx.strokeStyle = 'rgba(219,230,245,.55)'
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad * 0.62, 0, Math.PI * 2); ctx.stroke()
       for (let k = 0; k < 6; k++) {
-        const a2 = spin + (k * Math.PI) / 3
+        const a2 = (k * Math.PI) / 3
         ctx.beginPath()
-        ctx.moveTo(c.x + Math.cos(a2) * rad * 0.72, c.y + Math.sin(a2) * rad * 0.72)
+        ctx.moveTo(c.x + Math.cos(a2) * rad * 0.62, c.y + Math.sin(a2) * rad * 0.62)
         ctx.lineTo(c.x + Math.cos(a2) * rad, c.y + Math.sin(a2) * rad); ctx.stroke()
       }
-      ctx.beginPath(); ctx.arc(c.x, c.y, 3.5, 0, 7)
-      ctx.fillStyle = 'rgba(219,230,245,.95)'; ctx.fill()
-      // 绳越过的顶部高亮（绳与轮接触处稍微加粗一点黄）
-      if (ends) {
-        ctx.strokeStyle = 'rgba(201,162,39,.55)'; ctx.lineWidth = 2.4 * LW
-        ctx.beginPath(); ctx.arc(c.x, c.y, rad + 0.8, 0, Math.PI * 2); ctx.stroke()
+      ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 7)
+      ctx.fillStyle = '#38bdf8'; ctx.fill()
+      ctx.strokeStyle = 'rgba(56,189,248,.5)'; ctx.lineWidth = 1 * LW
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad + 4, 0, Math.PI * 2); ctx.stroke()
+      ctx.restore(); ctx.lineWidth = 1 * LW
+    },
+  },
+    spring: {
+    name: '弹簧',
+    defaults: () => ({ k: 50, restLen: 120 }),
+    fields: [
+      { key: 'k', label: '劲度系数 k', unit: 'N/m', min: 5, max: 500, step: 5 },
+      { key: 'restLen', label: '原长', unit: 'px', min: 40, max: 400, step: 10 },
+    ],
+    body: null,
+    force: (c, components) => pairForce(c, components, (d, p) => -p.k * ((d - p.restLen) / 100)),
+    overlay: (ctx, c, components) => drawSpring(ctx, c, components),
+  },
+  rope: {
+    name: '轻绳',
+    defaults: () => ({ len: 150 }),
+    fields: [{ key: 'len', label: '绳长', unit: 'px', min: 40, max: 500, step: 10 }],
+    body: null,
+    overlay: (ctx, c, components) => {
+      const ends = pairEnds(c, components); if (!ends) return
+      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.5 * LW
+      ctx.beginPath(); ctx.moveTo(ends[0].body.position.x, ends[0].body.position.y)
+      ctx.lineTo(ends[1].body.position.x, ends[1].body.position.y); ctx.stroke(); ctx.lineWidth = 1 * LW
+    },
+  },
+  pulley: {
+    name: '定滑轮',
+    defaults: () => ({ r: 22, len: 320 }),
+    fields: [
+      { key: 'r', label: '半径', unit: 'px', min: 10, max: 60, step: 2 },
+      { key: 'len', label: '绳总长', unit: 'px', min: 100, max: 800, step: 20 },
+    ],
+    body: (x, y, p) => ({ type: 'circle', r: p.r,
+      options: { isStatic: true, friction: 0 }, label: 'pulley' }),
+    // 跨过滑轮的绳：两端到滑轮距离之和 ≤ len（硬约束，见 sim/constraints.js）
+    overlay: (ctx, c, components) => {
+      const ends = pairEnds(c, components)
+      const rad = c.props.r ?? 22
+      ctx.save()
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+      // 绳（黄色，画在轮体下面）：从物体到轮缘
+      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.6 * LW
+      if (ends) for (const end of ends) {
+        const b = end.body.position
+        const dx = b.x - c.x, dy = b.y - c.y, d = Math.hypot(dx, dy) || 1
+        ctx.beginPath(); ctx.moveTo(b.x, b.y)
+        ctx.lineTo(c.x + dx / d * rad, c.y + dy / d * rad); ctx.stroke()
       }
+      // 轮体：深色填充轮 + 亮外圈 + 6 轮辐 + 大中心轴
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(7,11,18,.9)'; ctx.fill()
+      ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.6 * LW; ctx.stroke()
+      ctx.lineWidth = 1.1 * LW
+      ctx.strokeStyle = 'rgba(219,230,245,.55)'
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad * 0.62, 0, Math.PI * 2); ctx.stroke()
+      for (let k = 0; k < 6; k++) {
+        const a2 = (k * Math.PI) / 3
+        ctx.beginPath()
+        ctx.moveTo(c.x + Math.cos(a2) * rad * 0.62, c.y + Math.sin(a2) * rad * 0.62)
+        ctx.lineTo(c.x + Math.cos(a2) * rad, c.y + Math.sin(a2) * rad); ctx.stroke()
+      }
+      ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 7)
+      ctx.fillStyle = '#38bdf8'; ctx.fill()
+      ctx.strokeStyle = 'rgba(56,189,248,.5)'; ctx.lineWidth = 1 * LW
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad + 4, 0, Math.PI * 2); ctx.stroke()
+      ctx.restore(); ctx.lineWidth = 1 * LW
+    },
+  },
+  magnet: {
+    name: '条形磁铁',
+    defaults: () => ({ len: 120, strength: 5, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 60, max: 400, step: 10 },
+      { key: 'strength', label: '磁强度', unit: '', min: 1, max: 20, step: 1 },
+      { key: 'angle', label: '方向（0°=N朝右）', unit: '°', min: 0, max: 330, step: 30 },
+    ],
+    // 简化模型：两个磁荷（N 在 +len/2 沿轴，S 在 −len/2），对带电运动电荷按 B∝1/r² 近似施加力
+    body: (x, y, p) => ({ type: 'rectangle', w: p.len ?? 120, h: 22,
+      options: { isStatic: true, friction: 0 }, label: 'magnet' }),
+    overlay: (ctx, c) => {
+      const len = c.props.len ?? 120, a = ((c.props.angle ?? 0) * Math.PI) / 180
+      const x = c.x, y = c.y
+      ctx.save()
+      ctx.translate(x, y); ctx.rotate(a)
+      const L = len / 2, hh = 11
+      // N 半边（红）S 半边（蓝）
+      ctx.fillStyle = 'rgba(248,113,113,.28)'
+      ctx.fillRect(-L, -hh, L, hh * 2)
+      ctx.fillStyle = 'rgba(96,165,250,.28)'
+      ctx.fillRect(0, -hh, L, hh * 2)
+      ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.5 * LW
+      ctx.strokeRect(-L, -hh, len, hh * 2)
+      ctx.beginPath(); ctx.moveTo(0, -hh); ctx.lineTo(0, hh); ctx.stroke()
+      ctx.fillStyle = '#f87171'; ctx.font = `bold ${12 * LW}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText('N', L * 0.55, 0)
+      ctx.fillStyle = '#60a5fa'
+      ctx.fillText('S', -L * 0.55, 0)
       ctx.restore(); ctx.lineWidth = 1 * LW
     },
   },
@@ -514,8 +658,12 @@ export const registry = {
     ],
     body: null,
     overlay: (ctx, c) => {
-      const { w, h, ex, ey } = c.props
-      const x = c.x, y = c.y
+      const { ex, ey } = c.props
+      const inf = c.props.w >= 3200 || c.props.h >= 3200
+      const cw = ctx.canvas.width, ch = ctx.canvas.height
+      const w = c.props.w >= 3200 ? cw * 3 : c.props.w
+      const h = c.props.h >= 3200 ? ch * 3 : c.props.h
+      const x = c.props.w >= 3200 ? cw / 2 : c.x, y = c.props.h >= 3200 ? ch / 2 : c.y
       ctx.save()
       ctx.strokeStyle = '#d2a8ff'; ctx.fillStyle = 'rgba(210,168,255,.06)'; ctx.lineWidth = 1.5 * LW
       ctx.fillRect(x - w/2, y - h/2, w, h); ctx.strokeRect(x - w/2, y - h/2, w, h)

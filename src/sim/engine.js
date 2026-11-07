@@ -27,6 +27,35 @@ export function createWorld() {
 import { enforceConstraints } from './constraints.js'
 
 export function applyForces(components) {
+  // 条形磁铁：双磁荷模型，N/S 磁荷对运动电荷施加 F ∝ strength·q·v / r²（方向近似沿磁荷连线）
+  for (const mg of components) {
+    if (mg.type !== 'magnet') continue
+    const len = mg.props.len ?? 120, a = ((mg.props.angle ?? 0) * Math.PI) / 180
+    const ux = Math.cos(a), uy = Math.sin(a)
+    const poles = [
+      { x: mg.x + ux * len / 2, y: mg.y + uy * len / 2, s: 1 },
+      { x: mg.x - ux * len / 2, y: mg.y - uy * len / 2, s: -1 },
+    ]
+    for (const c of charges) {
+      const q = c.props.q ?? (c.type === 'charge' ? 1 : 0)
+      if (!q) continue
+      const body = c.body
+      const v = Math.hypot(body.velocity.x, body.velocity.y)
+      if (v < 0.01) continue
+      for (const pole of poles) {
+        const dx = body.position.x - pole.x, dy = body.position.y - pole.y
+        const d2 = Math.max(dx * dx + dy * dy, 400)
+        const d = Math.sqrt(d2)
+        const F = (mg.props.strength ?? 5) * Math.abs(q) * v * 20 / d2   // 经验系数，屏幕单位
+        const dir = pole.s * Math.sign(q)   // N 吸引负电荷/排斥正电荷（简化）
+        Matter.Body.applyForce(body, body.position, {
+          x: -dx / d * F * dir * FORCE_SCALE * 10,
+          y: -dy / d * F * dir * FORCE_SCALE * 10,
+        })
+      }
+    }
+  }
+
   // 弹簧/绳/滑轮等元件的约束力
   for (const c of components) {
     if (registry[c.type]?.force) registry[c.type].force(c, components)
@@ -63,8 +92,12 @@ export function applyForces(components) {
   // 磁场：洛伦兹力只改变速度方向。若用「每步加力」的半隐式欧拉，
   // 圆运动会一步步变大（能量漂移），所以直接按 ω = qB/m 精确旋转速度矢量。
   // 电场：F = qE，仍按力施加。
-  const inside = (body, f) =>
-    Math.abs(body.position.x - f.x) <= f.props.w / 2 && Math.abs(body.position.y - f.y) <= f.props.h / 2
+  const inside = (body, f) => {
+    // 「无限大」场（宽或高 ≥3200）：物理上按 9600×7200 巨区处理，覆盖整个可视世界
+    const w = f.props.w >= 3200 ? 9600 : f.props.w
+    const h = f.props.h >= 3200 ? 7200 : f.props.h
+    return Math.abs(body.position.x - f.x) <= w / 2 && Math.abs(body.position.y - f.y) <= h / 2
+  }
 
   for (const c of charges) {
     const body = c.body
