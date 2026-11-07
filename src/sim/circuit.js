@@ -212,12 +212,14 @@ export function autoParallel(x, y, len, angle, objs, maxGap = 260) {
       const t2 = (e2.x - n1.x) * nx + (e2.y - n1.y) * ny
       const tmin = Math.min(t1, t2), tmax = Math.max(t1, t2)
       // 覆盖 [0, d]，且略超出（外侧 ≥12px 以便 U 形引线有落脚点）
-      if (!(tmin < -12 && tmax > d + 12)) continue
-      // 元件到节点连线距离不太大（垂直方向偏移）
+      // 元件轴心到节点连线的垂直距离（沿线方向上的投影偏差不算）
       const cross = ((x - n1.x) * ny - (y - n1.y) * nx)
       const off = Math.abs(cross)
       if (off > 200) continue
-      const score = off + Math.abs((tmin + 12)) + Math.abs(tmax - d - 12)
+      // 轴心沿线位置大致居中于节点对（允许偏 40%）
+      const tmid = (t1 + t2) / 2
+      if (Math.abs(tmid - d / 2) > Math.max(60, d * 0.45)) continue
+      const score = off + Math.abs(tmid - d / 2)
       if (score < bestScore) {
         bestScore = score
         best = { n1, n2, nx, ny, d, t1, t2 }
@@ -230,9 +232,22 @@ export function autoParallel(x, y, len, angle, objs, maxGap = 260) {
   // 但端子未精确落在节点上 → 直接平移元件使两端引脚落点尽量贴近节点延长线：
   // 计算元件轴与节点连线中点的垂足，把元件中心对齐到中点法向偏移保持不变
   const mx = (best.n1.x + best.n2.x) / 2, my = (best.n1.y + best.n2.y) / 2
-  // 元件中心到中点的横向偏移保持，纵向对齐中点
+  // 元件中心对齐节点对中点（垂直方向保留用户给的偏移）
   const along = (x - mx) * best.nx + (y - my) * best.ny
-  return { x: x - along * best.nx, y: y - along * best.ny, angle, parallel: true }
+  // 自动加长：覆盖两节点并各留 24px 引脚落脚
+  const newLen = Math.max(len, best.d + 48)
+  // 两根正交引线：从节点连到导线端子（沿节点连线方向）
+  const half = newLen / 2
+  const cx2 = x - along * best.nx, cy2 = y - along * best.ny
+  const pe1 = { x: cx2 - ux * half, y: cy2 - uy * half }
+  const pe2 = { x: cx2 + ux * half, y: cy2 + uy * half }
+  const mkWire = (n, e) => {
+    const wlen = Math.hypot(e.x - n.x, e.y - n.y)
+    const wang = Math.atan2(e.y - n.y, e.x - n.x) * 180 / Math.PI
+    return { x: (n.x + e.x) / 2, y: (n.y + e.y) / 2, angle: wang, len: wlen }
+  }
+  const wires = [mkWire(best.n1, pe1), mkWire(best.n2, pe2)]
+  return { x: x - along * best.nx, y: y - along * best.ny, angle, len: newLen, parallel: true, wires }
 }
 
 // 新元件放置：若附近有端子，则让新元件的一个端子落在该点上

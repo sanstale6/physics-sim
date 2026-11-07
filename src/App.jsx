@@ -46,20 +46,24 @@ export default function App() {
   }, [])
 
   const place = useCallback((x, y) => {
-    let px = x, py = y, angle = 0
+    let px = x, py = y, angle = 0, parLen = null
     const snap = snapToIncline(tool, x, y, sim.objsRef.current)
     if (snap) { px = snap.x; py = snap.y; angle = snap.angle }
     else if (CIRCUIT_TYPES.includes(tool)) {
       const d = registry[tool].defaults()
       // 并联自动成形：与既有节点对正交搭接 → 平移对齐成并联
       const par = autoParallel(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
-      if (par) { px = par.x; py = par.y }
+      if (par) {
+        px = par.x; py = par.y; parLen = par.len
+        for (const w of par.wires ?? []) sim.add('wire', w.x, w.y, { len: w.len }, w.angle)
+      }
       else {
         const t = placeCircuit(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
         px = t.x; py = t.y
       }
     }
-    const id = sim.add(tool, px, py, undefined, angle)
+    const id = sim.add(tool, px, py, parLen != null ? { len: parLen } : undefined, angle)
+    if (id != null) notify('已放置：' + (registry[tool]?.name ?? tool))
     setSelected(id); setShowInspector(true)
   }, [sim, tool])
 
