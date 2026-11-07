@@ -296,7 +296,7 @@ export default function SimCanvas(props) {
       setLineScale(view.scale)
 
       for (const o of objs) {
-        if ((o.type === 'magnet' || o.type === 'solenoid') && P.current.showB) drawFieldLines(ctx, o, view.scale)
+        if ((o.type === 'magnet' || o.type === 'solenoid') && P.current.showB) drawFieldLines(ctx, o, view.scale, objs)
         if (o.type === 'incline') drawIncline(ctx, o, P.current.selectedId, view.scale)
         else if (o.body) {
           if (o.type !== 'pulley') drawBody(ctx, o, P.current.selectedId, view.scale)
@@ -413,45 +413,68 @@ function drawScaleBar(ctx, w, h, scale) {
   ctx.restore()
 }
 
-// 磁感线：磁铁周围画弧形闭合曲线（N→S），密度∝strength；螺线管同
-function drawFieldLines(ctx, o, scale) {
+// 磁感线：从 N 极周围一圈出发，沿磁场方向数值积分到 S 极
+function drawFieldLines(ctx, o, scale, comps) {
   const len = o.props.len ?? (o.type === 'solenoid' ? 160 : 120)
-  const a = ((o.props.angle ?? 0) * Math.PI) / 180
+  const ang = ((o.props.angle ?? 0) * Math.PI) / 180
+  const ux = Math.cos(ang), uy = Math.sin(ang)
+  const Npt = { x: o.x + ux * len / 2, y: o.y + uy * len / 2 }
   const strength = o.type === 'solenoid' ? (o.props.I ?? 2) : (o.props.strength ?? 5)
-  const ux = Math.cos(a), uy = Math.sin(a)
-  const N = Math.min(10, 2 + Math.round(strength / 2))
+  const nLines = Math.min(12, 3 + Math.round(strength))
+  const L = len
   ctx.save()
-  ctx.strokeStyle = 'rgba(148,163,184,.35)'
+  ctx.strokeStyle = 'rgba(148,163,184,.4)'
   ctx.lineWidth = 1 / scale
-  for (let k = 0; k < N; k++) {
-    // 曲线从 N 极绕到 S 极，偏移距离随 k 增大
-    const off = 12 + k * (len * 0.32)
-    ctx.beginPath()
-    const steps = 40
-    for (let t = 0; t <= steps; t++) {
-      const u = t / steps
-      // 参数化：沿轴 -L→L 为主，法向偏移呈半椭圆
-      const px = -len / 2 + u * len
-      const py = off * Math.sin(Math.PI * u)
-      // 世界坐标（旋转 a）
-      const wx = o.x + px * ux - py * uy
-      const wy = o.y + px * uy + py * ux
-      if (t === 0) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy)
+  for (let k = 0; k < nLines; k++) {
+    // 出射角：从 N 极向外均匀扇形（避开轴向正后方）
+    const spread = -Math.PI * 0.85 + (k / (nLines - 1)) * Math.PI * 1.7
+    let px = Npt.x + Math.cos(ang + spread) * 6
+    let py = Npt.y + Math.sin(ang + spread) * 6
+    ctx.beginPath(); ctx.moveTo(px, py)
+    let hitS = false
+    for (let step = 0; step < 220 && !hitS; step++) {
+      const f = fieldAt(px, py, comps)
+      if (f.mag < 1e-3) break
+      const h = Math.min(6, 60 / (f.mag + 2))   // 自适应步长
+      px += f.bx / f.mag * h
+      py += f.by / f.mag * h
+      ctx.lineTo(px, py)
+      // 到达 S 极附近
+      if (Math.hypot(px - (o.x - ux * len / 2), py - (o.y - uy * len / 2)) < 10) hitS = true
     }
     ctx.stroke()
-    // 中点箭头
-    const mx = o.x + ux * 0, my = o.y + uy * 0
-    const tx = o.x + 0 * ux - off * uy, ty = o.y + 0 * uy + off * ux
-    const dx = ux, dy = uy
-    ctx.fillStyle = 'rgba(148,163,184,.5)'
-    ctx.beginPath()
-    ctx.moveTo(tx + dx * 5, ty + dy * 5)
-    ctx.lineTo(tx - dy * 3 - dx * 3, ty + dx * 3 - dy * 3)
-    ctx.lineTo(tx + dy * 3 - dx * 3, ty - dx * 3 - dy * 3)
-    ctx.closePath(); ctx.fill()
+    // 中途箭头（取路径 1/3 处的切向）
+  }
+  // 箭头：在场线中段画。简化：对每条线重走一遍到 1/3 位置画箭头
+  ctx.fillStyle = 'rgba(148,163,184,.55)'
+  for (let k = 0; k < nLines; k++) {
+    const spread = -Math.PI * 0.85 + (k / (nLines - 1)) * Math.PI * 1.7
+    let px = Npt.x + Math.cos(ang + spread) * 6
+    let py = Npt.y + Math.sin(ang + spread) * 6
+    let trav = 0, total = 0
+    const pts = []
+    for (let step = 0; step < 220; step++) {
+      const f = fieldAt(px, py, comps)
+      if (f.mag < 1e-3) break
+      const h = Math.min(6, 60 / (f.mag + 2))
+      const ddx = f.bx / f.mag * h, ddy = f.by / f.mag * h
+      px += ddx; py += ddy; trav += h
+      pts.push({ x: px, y: py, dx: ddx, dy: ddy })
+      if (Math.hypot(px - (o.x - ux * len / 2), py - (o.y - uy * len / 2)) < 10) break
+    }
+    const mid = pts[Math.floor(pts.length / 2)]
+    if (mid) {
+      const dl = Math.hypot(mid.dx, mid.dy) || 1
+      ctx.beginPath()
+      ctx.moveTo(mid.x + mid.dx / dl * 6, mid.y + mid.dy / dl * 6)
+      ctx.lineTo(mid.x - mid.dy / dl * 3 - mid.dx / dl * 3, mid.y + mid.dx / dl * 3 - mid.dy / dl * 3)
+      ctx.lineTo(mid.x + mid.dy / dl * 3 - mid.dx / dl * 3, mid.y - mid.dx / dl * 3 - mid.dy / dl * 3)
+      ctx.closePath(); ctx.fill()
+    }
   }
   ctx.restore()
 }
+
 function drawIncline(ctx, o, selectedId, scale) {
   const g = inclineGeom(o)
   const sel = o.id === selectedId

@@ -32,7 +32,7 @@ export function applyForces(components) {
     if (registry[c.type]?.force) registry[c.type].force(c, components)
   }
   const forces = components.filter(c => c.type === 'constantForce')
-  const charges = components.filter(c => c.type === 'charge' && c.body)
+  const charges = components.filter(c => c.body && (c.props.q ?? (c.type === 'charge' ? 1 : 0)) !== 0)
   const fields = components.filter(c => c.type === 'uniformB' || c.type === 'uniformE')
 
   // 恒力：作用在最近的物块/小球上（超出 260px 视为未连接）
@@ -87,10 +87,31 @@ export function applyForces(components) {
     }
     if (rotated) {
       Matter.Body.setVelocity(body, { x: vx / VEL_SCALE, y: vy / VEL_SCALE })
+      // 大转角下直线位移落在弦中点（比弧中点更靠内），径向外推补偿 R(1−cos(φ/2))
+      const vpx = Math.hypot(body.velocity.x, body.velocity.y)
+      let phiSum = 0
+      for (const f of fields) {
+        if (f.type !== 'uniformB' || !inside(body, f)) continue
+        phiSum += (c.props.q * f.props.bz) / m / 60
+      }
+      if (vpx > 0.01 && Math.abs(phiSum) > 1e-6) {
+        const R = vpx / Math.abs(phiSum)
+        const half = Math.abs(phiSum) / 2
+        const push = R * (1 - Math.cos(half))
+        const sgn = Math.sign(phiSum)
+        const uxv = body.velocity.x / vpx, uyv = body.velocity.y / vpx
+        const cx = body.position.x - uyv * sgn * R
+        const cy = body.position.y + uxv * sgn * R
+        const dx = body.position.x - cx, dy = body.position.y - cy
+        const dl = Math.hypot(dx, dy) || 1
+        Matter.Body.setPosition(body, { x: body.position.x + dx / dl * push, y: body.position.y + dy / dl * push }, false)
+      }
     }
-    // 带电粒子不计重力：matter 的重力对所有 body 生效，这里反向抵消
-    const gw = gravityState.on ? body.mass * GRAV.y * GRAV.scale : 0
-    if (gw) Matter.Body.applyForce(body, body.position, { x: 0, y: -gw })
+    // 点电荷不计重力（高中题设定）；带电物块/小球正常受重力
+    if (c.type === 'charge') {
+      const gw = gravityState.on ? body.mass * GRAV.y * GRAV.scale : 0
+      if (gw) Matter.Body.applyForce(body, body.position, { x: 0, y: -gw })
+    }
     for (const f of fields) {
       if (f.type !== 'uniformE' || !inside(body, f)) continue
       const p = f.props
@@ -101,7 +122,7 @@ export function applyForces(components) {
         y: -q * p.ey * FORCE_SCALE,
       })
     }
-  }  // 条形磁铁：双磁荷简化模型——N/S 磁荷对运动电荷施加类洛伦兹力（教学演示用经验公式）
+  }  // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
   for (const mg of components) {
     if (mg.type !== 'magnet') continue
     const len = mg.props.len ?? 120, a = ((mg.props.angle ?? 0) * Math.PI) / 180
@@ -114,16 +135,16 @@ export function applyForces(components) {
       const q = c.props.q ?? (c.type === 'charge' ? 1 : 0)
       if (!q) continue
       const body = c.body
-      const v = Math.hypot(body.velocity.x, body.velocity.y)
+      const vx = body.velocity.x, vy = body.velocity.y
+      const v = Math.hypot(vx, vy)
       if (v < 0.01) continue
       let fx = 0, fy = 0
       for (const pole of poles) {
         const dx = body.position.x - pole.x, dy = body.position.y - pole.y
-        const d2 = Math.max(dx * dx + dy * dy, 900)
-        const d = Math.sqrt(d2)
-        const F = (mg.props.strength ?? 5) * pole.s * q * v * 30 / d2
-        fx += (-dy / d) * F
-        fy += (dx / d) * F
+        const d2 = Math.max(dx * dx + dy * dy, 400)
+        const F = (mg.props.strength ?? 5) * pole.s * q * v / d2   // 旋向力：N 逆时针、S 顺时针（屏幕坐标）
+        fx += -vy / v * F
+        fy += vx / v * F
       }
       Matter.Body.applyForce(body, body.position, { x: fx * FORCE_SCALE, y: fy * FORCE_SCALE })
     }

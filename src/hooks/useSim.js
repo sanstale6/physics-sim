@@ -198,6 +198,10 @@ export function useSim() {
     const o = objsRef.current.find(o => o.id === id)
     if (!o) return
     // 电路线段元件：拖动时若附近（26px）有其他端子，则平移使该端子精确对齐（保持连接不断）
+    if (o.type === 'junction') {
+      const snap = snapToPin(x, y, objsRef.current.filter(t => t.id !== id))
+      if (snap) { x = snap.x; y = snap.y }
+    }
     if (CIRCUIT_TYPES.includes(o.type) && o.type !== 'junction') {
       const len = o.props.len ?? 90
       const a = ((o.props.angle ?? 0) * Math.PI) / 180
