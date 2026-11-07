@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Matter from 'matter-js'
 import { createWorld, applyForces, postStep, VEL_SCALE, GRAV, gravityState } from '../sim/engine.js'
 import { registry } from '../sim/registry.js'
-import { snapToPin, CIRCUIT_TYPES } from '../sim/circuit.js'
+import { snapToPin, snapJunction, CIRCUIT_TYPES } from '../sim/circuit.js'
 
 const LINK_TYPES = new Set(['rope', 'spring', 'pulley', 'pendulum'])
 
@@ -199,7 +199,7 @@ export function useSim() {
     if (!o) return
     // 电路线段元件：拖动时若附近（26px）有其他端子，则平移使该端子精确对齐（保持连接不断）
     if (o.type === 'junction') {
-      const snap = snapToPin(x, y, objsRef.current.filter(t => t.id !== id))
+      const snap = snapJunction(x, y, objsRef.current.filter(t => t.id !== id))
       if (snap) { x = snap.x; y = snap.y }
     }
     if (CIRCUIT_TYPES.includes(o.type) && o.type !== 'junction') {

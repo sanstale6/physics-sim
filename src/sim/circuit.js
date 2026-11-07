@@ -48,6 +48,30 @@ function clusterNodes(els, tol = 12) {
       if (Math.hypot(pts[i].x - jx, pts[i].y - jy) < 20) parent[find(i)] = find(ji)
     }
   }
+  // 接点压在导线/元件线段上（含中段）→ 视为接入该线：
+  // 理想导体（wire/junction）整段同节点，两端端子都并入；含阻元件并到较近端子（等效搭在引脚上）
+  const CONDUCTORS = new Set(['wire', 'junction'])
+  for (const [, ji] of unions) {
+    const jx = pts[ji].x, jy = pts[ji].y
+    for (const e of els) {
+      if (e.id === pts[ji].id) continue
+      const ps = pins(e)
+      if (ps.length !== 2) continue
+      const dx = ps[1].x - ps[0].x, dy = ps[1].y - ps[0].y
+      const L2 = dx * dx + dy * dy
+      if (L2 < 1) continue
+      let t = ((jx - ps[0].x) * dx + (jy - ps[0].y) * dy) / L2
+      t = Math.max(0, Math.min(1, t))
+      const px = ps[0].x + t * dx, py = ps[0].y + t * dy
+      if (Math.hypot(jx - px, jy - py) >= 20) continue
+      if (CONDUCTORS.has(e.type)) {
+        for (let k = 0; k < pts.length; k++) if (pts[k].id === e.id) parent[find(k)] = find(ji)
+      } else {
+        const near = t < 0.5 ? 0 : 1
+        for (let k = 0; k < pts.length; k++) if (pts[k].id === e.id && pts[k].side === near) parent[find(k)] = find(ji)
+      }
+    }
+  }
   const map = new Map()
   const nodeOf = pts.map((_, i) => {
     const r = find(i)
@@ -156,6 +180,27 @@ export function snapToPin(x, y, objs, maxDist = 26) {
 }
 
 // 新元件放置：若附近有端子，则让新元件的一个端子落在该点上
+// 接点拖动吸附：优先吸到附近端子（26px），否则吸到导线/元件线段上的投影点（含中段，20px）
+export function snapJunction(x, y, objs, maxDist = 26) {
+  const pin = snapToPin(x, y, objs, maxDist)
+  if (pin) return { x: pin.x, y: pin.y }
+  let best = null, bd = 20
+  for (const o of objs) {
+    if (!CIRCUIT_TYPES.includes(o.type)) continue
+    const ps = pins(o)
+    if (ps.length !== 2) continue
+    const dx = ps[1].x - ps[0].x, dy = ps[1].y - ps[0].y
+    const L2 = dx * dx + dy * dy
+    if (L2 < 1) continue
+    let t = ((x - ps[0].x) * dx + (y - ps[0].y) * dy) / L2
+    t = Math.max(0, Math.min(1, t))
+    const px = ps[0].x + t * dx, py = ps[0].y + t * dy
+    const d = Math.hypot(x - px, y - py)
+    if (d < bd) { bd = d; best = { x: px, y: py } }
+  }
+  return best
+}
+
 export function placeCircuit(x, y, len, angle, objs) {
   const snap = snapToPin(x, y, objs)
   if (!snap) return { x, y }
