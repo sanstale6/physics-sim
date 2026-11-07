@@ -168,4 +168,38 @@ Object.assign(presets, {
     { type: 'bulb', x: 500, y: 320, props: { R: 10, len: 160, angle: 90 } },
     { type: 'bulb', x: 400, y: 400, props: { R: 20, len: 200, angle: 0 } },
   ],
+  磁铁吸引电子束: [
+    { type: 'ball', x: 150, y: 300, props: { m: 0.5, r: 10, q: -10, v0x: 8, v0y: 0, mu: 0 } },
+    { type: 'magnet', x: 450, y: 300, props: { len: 160, strength: 10, angle: 0 } },
+    { type: 'track', x: 150, y: 560, props: { len: 300 } },
+  ],
+  带电摆线偏转: [
+    { type: 'pendulum', x: 400, y: 160, props: { len: 240 } },
+    { type: 'ball', x: 460, y: 380, props: { m: 1, r: 12, q: 5, mu: 0 } },
+    { type: 'uniformE', x: 400, y: 400, props: { w: 400, h: 260, ex: 300, ey: 0 } },
+  ],
+  金属导轨上滑杆: [
+    { type: 'rail', x: 400, y: 330, props: { len: 420, gap: 120 } },
+    { type: 'block', x: 400, y: 330, props: { m: 0.5, mu: 0, q: 30, v0x: 3, v0y: 0 } },
+    { type: 'uniformB', x: 400, y: 330, props: { w: 480, h: 200, bz: 2 } },
+  ],
+  小磁针指北: [
+    { type: 'compass', x: 300, y: 300, props: { len: 48 } },
+    { type: 'magnet', x: 480, y: 300, props: { len: 140, strength: 8, angle: 0 } },
+    { type: 'compass', x: 620, y: 220, props: { len: 44 } },
+  ],
+  通电螺线管磁场: [
+    { type: 'solenoid', x: 400, y: 300, props: { len: 220, angle: 0, I: 4, n: 10 } },
+    { type: 'compass', x: 400, y: 180, props: { len: 44 } },
+    { type: 'compass', x: 580, y: 300, props: { len: 44 } },
+  ],
+  传送带刹车: [
+    { type: 'conveyor', x: 400, y: 500, props: { len: 520, v: 3 } },
+    { type: 'block', x: 260, y: 480, props: { m: 1, mu: 0.5, v0x: 0, v0y: 0 } },
+    { type: 'constantForce', x: 620, y: 430, props: { fx: -3, fy: 0 } },
+  ],
+  竖直圆周运动: [
+    { type: 'ball', x: 400, y: 200, props: { m: 0.5, r: 12, q: 0, v0x: 9, v0y: 0 } },
+    { type: 'uniformB', x: 400, y: 330, props: { w: 520, h: 460, bz: 1.5 } },
+  ],
 })
