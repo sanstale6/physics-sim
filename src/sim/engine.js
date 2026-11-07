@@ -27,35 +27,6 @@ export function createWorld() {
 import { enforceConstraints } from './constraints.js'
 
 export function applyForces(components) {
-  // 条形磁铁：双磁荷模型，N/S 磁荷对运动电荷施加 F ∝ strength·q·v / r²（方向近似沿磁荷连线）
-  for (const mg of components) {
-    if (mg.type !== 'magnet') continue
-    const len = mg.props.len ?? 120, a = ((mg.props.angle ?? 0) * Math.PI) / 180
-    const ux = Math.cos(a), uy = Math.sin(a)
-    const poles = [
-      { x: mg.x + ux * len / 2, y: mg.y + uy * len / 2, s: 1 },
-      { x: mg.x - ux * len / 2, y: mg.y - uy * len / 2, s: -1 },
-    ]
-    for (const c of charges) {
-      const q = c.props.q ?? (c.type === 'charge' ? 1 : 0)
-      if (!q) continue
-      const body = c.body
-      const v = Math.hypot(body.velocity.x, body.velocity.y)
-      if (v < 0.01) continue
-      for (const pole of poles) {
-        const dx = body.position.x - pole.x, dy = body.position.y - pole.y
-        const d2 = Math.max(dx * dx + dy * dy, 400)
-        const d = Math.sqrt(d2)
-        const F = (mg.props.strength ?? 5) * Math.abs(q) * v * 20 / d2   // 经验系数，屏幕单位
-        const dir = pole.s * Math.sign(q)   // N 吸引负电荷/排斥正电荷（简化）
-        Matter.Body.applyForce(body, body.position, {
-          x: -dx / d * F * dir * FORCE_SCALE * 10,
-          y: -dy / d * F * dir * FORCE_SCALE * 10,
-        })
-      }
-    }
-  }
-
   // 弹簧/绳/滑轮等元件的约束力
   for (const c of components) {
     if (registry[c.type]?.force) registry[c.type].force(c, components)
@@ -130,17 +101,42 @@ export function applyForces(components) {
         y: -q * p.ey * FORCE_SCALE,
       })
     }
+  }  // 条形磁铁：双磁荷简化模型——N/S 磁荷对运动电荷施加类洛伦兹力（教学演示用经验公式）
+  for (const mg of components) {
+    if (mg.type !== 'magnet') continue
+    const len = mg.props.len ?? 120, a = ((mg.props.angle ?? 0) * Math.PI) / 180
+    const ux = Math.cos(a), uy = Math.sin(a)
+    const poles = [
+      { x: mg.x + ux * len / 2, y: mg.y + uy * len / 2, s: 1 },
+      { x: mg.x - ux * len / 2, y: mg.y - uy * len / 2, s: -1 },
+    ]
+    for (const c of charges) {
+      const q = c.props.q ?? (c.type === 'charge' ? 1 : 0)
+      if (!q) continue
+      const body = c.body
+      const v = Math.hypot(body.velocity.x, body.velocity.y)
+      if (v < 0.01) continue
+      let fx = 0, fy = 0
+      for (const pole of poles) {
+        const dx = body.position.x - pole.x, dy = body.position.y - pole.y
+        const d2 = Math.max(dx * dx + dy * dy, 900)
+        const d = Math.sqrt(d2)
+        const F = (mg.props.strength ?? 5) * pole.s * q * v * 30 / d2
+        fx += (-dy / d) * F
+        fy += (dx / d) * F
+      }
+      Matter.Body.applyForce(body, body.position, { x: fx * FORCE_SCALE, y: fy * FORCE_SCALE })
+    }
   }
 
   // 自定义摩擦放在最后：此时 body.force 已包含本步重力之外的各外力，
   // 便于判断静摩擦是否足以顶住（μN 不足则转为滑动）。
   for (const c of components) {
-    if (c.body && !c.body.isStatic && (c.type === 'block' || c.type === 'ball')) {
+    if (c.body && !c.body.isStatic && (c.type === 'block' || c.type === 'ball' || c.type === 'particle')) {
       const f = frictionForce(c, components)
       if (f && (f.x || f.y)) Matter.Body.applyForce(c.body, c.body.position, { x: f.x * FORCE_SCALE, y: f.y * FORCE_SCALE })
     }
   }
-
 }
 
 export function nearestTarget(f, components) {

@@ -32,9 +32,22 @@ function clusterNodes(els, tol = 12) {
   for (const e of els) { const ps = pins(e); ps.forEach((q, k) => pts.push({ x: q.x, y: q.y, id: e.id, side: k })) }
   const parent = pts.map((_, i) => i)
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  const unions = new Map()   // junction id → 其中心点索引
+  for (let i = 0; i < pts.length; i++) {
+    const owner = els.find(e => e.id === pts[i].id)
+    if (owner?.type === 'junction') unions.set(owner.id, i)
+  }
   for (let i = 0; i < pts.length; i++)
     for (let j = i + 1; j < pts.length; j++)
       if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) < tol) parent[find(i)] = find(j)
+  // 接点吸力：任何端子在接点 20px 内 → 并入接点所在节点
+  for (const [, ji] of unions) {
+    const jx = pts[ji].x, jy = pts[ji].y
+    for (let i = 0; i < pts.length; i++) {
+      if (i === ji) continue
+      if (Math.hypot(pts[i].x - jx, pts[i].y - jy) < 20) parent[find(i)] = find(ji)
+    }
+  }
   const map = new Map()
   const nodeOf = pts.map((_, i) => {
     const r = find(i)

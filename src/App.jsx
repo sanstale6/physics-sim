@@ -21,6 +21,7 @@ export default function App() {
   const [selected, setSelected] = useState(null)
   const [showInspector, setShowInspector] = useState(false)
   const [showForces, setShowForces] = useState(true)
+  const [showB, setShowB] = useState(true)
   const [showHelp, setShowHelp] = useState(false)
   const [toast, setToast] = useState('')
   const toastTimer = useRef(0)
@@ -112,16 +113,18 @@ export default function App() {
         <Toolbar running={sim.running} onPlay={() => sim.setRunning(true)}
           onPause={() => sim.setRunning(false)} onReset={sim.reset} onClear={sim.clear}
           showForces={showForces} onToggleForces={() => setShowForces(v => !v)}
+          showB={showB} onToggleB={() => setShowB(v => !v)}
           onUndo={sim.undo} onRedo={sim.redo} canUndo={sim.canUndo} canRedo={sim.canRedo}
           onHelp={() => setShowHelp(true)} gravity={sim.gravity} onToggleGravity={() => sim.setGravity(!sim.gravity)}
-          speed={sim.speed} onSpeed={sim.setSpeed} />
+          speed={sim.speed} onSpeed={sim.setSpeed}
+          tool={tool} onToolSelect={() => pickTool('select')} />
       </header>
       <div className="main">
         <div className="canvas-wrap">
           <SimCanvas sim={sim} tool={tool} epoch={sim.epoch}
             onPlace={place} onPick={pick} onTap={pick}
             onSelectEmpty={() => setShowInspector(false)}
-            selectedId={selected} showForces={showForces} />
+            selectedId={selected} showForces={showForces} showB={showB} />
           <DataPanel body={selBody} time={sim.time} running={sim.running} />
           <MomentumPanel objs={sim.objsRef.current} running={sim.running} tick={sim.tick} />
         </div>

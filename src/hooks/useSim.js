@@ -53,6 +53,12 @@ export function useSim() {
     }
     else if (def.type === 'circle') body = Matter.Bodies.circle(o.x, o.y, def.r, opts)
     else if (def.type === 'vertices') body = Matter.Bodies.fromVertices(o.x, o.y, [def.verts], opts)
+    else if (def.type === 'compound') {
+      const parts = def.parts.map(p => p.type === 'rectangle'
+        ? Matter.Bodies.rectangle(o.x + p.x, o.y + p.y, p.w, p.h, p.options ?? opts)
+        : Matter.Bodies.circle(o.x + p.x, o.y + p.y, p.r, p.options ?? opts))
+      body = Matter.Body.create({ parts, ...opts, isStatic: true })
+    }
     if (body && o.props.m != null && !body.isStatic) Matter.Body.setMass(body, o.props.m)
     if (body && !body.isStatic && o.angle) Matter.Body.setAngle(body, o.angle)
     return body

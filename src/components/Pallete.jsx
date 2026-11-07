@@ -4,7 +4,7 @@ import { presets } from '../sim/presets.js'
 
 const GROUPS = [
   ['力学', ['select', 'particle', 'block', 'ball', 'incline', 'ground', 'track', 'conveyor', 'constantForce', 'spring', 'rope', 'pulley', 'pendulum']],
-  ['电磁', ['charge', 'uniformE', 'uniformB', 'rail', 'magnet']],
+  ['电磁', ['charge', 'uniformE', 'uniformB', 'rail', 'magnet', 'compass', 'solenoid']],
   ['电路', ['battery', 'wire', 'junction', 'resistor', 'rheostat', 'bulb', 'switch', 'ammeter', 'voltmeter']],
   ['光学', ['lightSource', 'mirror', 'lens', 'screen']],
 ]

@@ -22,6 +22,7 @@ export default function Toolbar({
         </select>
       </label>
       <button className={showForces ? 'active' : ''} onClick={onToggleForces} title="显示受力分析">受力</button>
+      <button className={showB ? 'active' : ''} onClick={onToggleB} title="显示磁感线">磁感线</button>
       <button className={gravity ? '' : 'active'} onClick={onToggleGravity} title="重力开关（失重演示）">{gravity ? 'g 重力' : '失重'}</button>
       <button onClick={onReset} title="物体回到初始位置">⟲ 重置</button>
       <button onClick={onHelp} title="操作说明" aria-label="操作说明">❓</button>

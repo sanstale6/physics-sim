@@ -5,6 +5,7 @@ import { traceRays } from '../sim/optics.js'
 import { hitTest } from '../sim/hit.js'
 import { inclineGeom, inTriangle } from '../sim/incline.js'
 import { CIRCUIT_TYPES, pins } from '../sim/circuit.js'
+import { fieldAt } from '../sim/magnetism.js'
 import { drawVectors, drawForceAnalysis } from './Vectors.jsx'
 
 const TAP_SLOP = 8    // 屏幕像素：超过它算拖动
@@ -295,6 +296,7 @@ export default function SimCanvas(props) {
       setLineScale(view.scale)
 
       for (const o of objs) {
+        if ((o.type === 'magnet' || o.type === 'solenoid') && P.current.showB) drawFieldLines(ctx, o, view.scale)
         if (o.type === 'incline') drawIncline(ctx, o, P.current.selectedId, view.scale)
         else if (o.body) {
           if (o.type !== 'pulley') drawBody(ctx, o, P.current.selectedId, view.scale)
@@ -411,6 +413,45 @@ function drawScaleBar(ctx, w, h, scale) {
   ctx.restore()
 }
 
+// 磁感线：磁铁周围画弧形闭合曲线（N→S），密度∝strength；螺线管同
+function drawFieldLines(ctx, o, scale) {
+  const len = o.props.len ?? (o.type === 'solenoid' ? 160 : 120)
+  const a = ((o.props.angle ?? 0) * Math.PI) / 180
+  const strength = o.type === 'solenoid' ? (o.props.I ?? 2) : (o.props.strength ?? 5)
+  const ux = Math.cos(a), uy = Math.sin(a)
+  const N = Math.min(10, 2 + Math.round(strength / 2))
+  ctx.save()
+  ctx.strokeStyle = 'rgba(148,163,184,.35)'
+  ctx.lineWidth = 1 / scale
+  for (let k = 0; k < N; k++) {
+    // 曲线从 N 极绕到 S 极，偏移距离随 k 增大
+    const off = 12 + k * (len * 0.32)
+    ctx.beginPath()
+    const steps = 40
+    for (let t = 0; t <= steps; t++) {
+      const u = t / steps
+      // 参数化：沿轴 -L→L 为主，法向偏移呈半椭圆
+      const px = -len / 2 + u * len
+      const py = off * Math.sin(Math.PI * u)
+      // 世界坐标（旋转 a）
+      const wx = o.x + px * ux - py * uy
+      const wy = o.y + px * uy + py * ux
+      if (t === 0) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy)
+    }
+    ctx.stroke()
+    // 中点箭头
+    const mx = o.x + ux * 0, my = o.y + uy * 0
+    const tx = o.x + 0 * ux - off * uy, ty = o.y + 0 * uy + off * ux
+    const dx = ux, dy = uy
+    ctx.fillStyle = 'rgba(148,163,184,.5)'
+    ctx.beginPath()
+    ctx.moveTo(tx + dx * 5, ty + dy * 5)
+    ctx.lineTo(tx - dy * 3 - dx * 3, ty + dx * 3 - dy * 3)
+    ctx.lineTo(tx + dy * 3 - dx * 3, ty - dx * 3 - dy * 3)
+    ctx.closePath(); ctx.fill()
+  }
+  ctx.restore()
+}
 function drawIncline(ctx, o, selectedId, scale) {
   const g = inclineGeom(o)
   const sel = o.id === selectedId

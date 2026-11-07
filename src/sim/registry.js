@@ -1,5 +1,6 @@
 import Matter from 'matter-js'
 import { solve } from './circuit.js'
+import { fieldAt } from './magnetism.js'
 
 // 叠加层线宽随相机缩放：SimCanvas 每帧调用 setLineScale(view.scale)
 export let LW = 1
@@ -16,6 +17,7 @@ export const registry = {
       { key: 'rest', label: '碰撞弹性', unit: '', min: 0, max: 1, step: 0.1 },
       { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
       { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'q', label: '带电量', unit: 'μC', min: -100, max: 100, step: 1 },
     ],
     body: (x, y, p) => ({ type: 'rectangle', w: 50, h: 30,
       options: { density: 0.001, friction: 0, frictionStatic: 0, restitution: p.rest ?? 0.2 }, label: 'block' }),
@@ -28,6 +30,7 @@ export const registry = {
       { key: 'r', label: '半径', unit: 'px', min: 3, max: 30, step: 1 },
       { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
       { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'q', label: '带电量', unit: 'μC', min: -100, max: 100, step: 1 },
     ],
     body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0 }, label: 'particle' }),
   },
@@ -40,6 +43,7 @@ export const registry = {
       { key: 'rest', label: '弹性', unit: '', min: 0, max: 1, step: 0.1 },
       { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
       { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'q', label: '带电量', unit: 'μC', min: -100, max: 100, step: 1 },
     ],
     body: (x, y, p) => ({ type: 'circle', r: p.r,
       options: { density: 0.001, friction: 0, restitution: p.rest ?? 0.8 }, label: 'ball' }),
@@ -117,6 +121,60 @@ export const registry = {
       ctx.restore()
     },
   },
+  compass: {
+    name: '小磁针',
+    defaults: () => ({ len: 44 }),
+    fields: [{ key: 'len', label: '长度', unit: 'px', min: 24, max: 80, step: 2 }],
+    body: null,
+    overlay: (ctx, c, all) => {
+      const L = (c.props.len ?? 44) / 2
+      let ang = c.angle ?? 0
+      const f = fieldAt(c.x, c.y, all)
+      if (f.mag > 1e-4) ang = Math.atan2(f.by, f.bx)
+      c.angle = ang
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(ang)
+      ctx.fillStyle = '#f87171'
+      ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(-L * 0.45, -4); ctx.lineTo(-L * 0.45, 4); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = '#93c5fd'
+      ctx.beginPath(); ctx.moveTo(-L * 0.45, -4); ctx.lineTo(-L, 0); ctx.lineTo(-L * 0.45, 4); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = '#f87171'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText('N', L + 7, 3)
+      ctx.restore()
+      ctx.fillStyle = '#dbe6f5'
+      ctx.beginPath(); ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2); ctx.fill()
+    },
+  },
+  solenoid: {
+    name: '通电螺线管',
+    defaults: () => ({ len: 160, angle: 0, I: 2, n: 8 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 60, max: 400, step: 10 },
+      { key: 'angle', label: '方向（N 朝）', unit: '°', min: 0, max: 330, step: 30 },
+      { key: 'I', label: '电流 I', unit: 'A', min: 0, max: 10, step: 0.5 },
+      { key: 'n', label: '匝数密度', unit: '匝/cm', min: 1, max: 20, step: 1 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const len = c.props.len ?? 160, a = ((c.props.angle ?? 0) * Math.PI) / 180
+      const on = (c.props.I ?? 2) > 0.01
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(a)
+      const L = len / 2
+      ctx.strokeStyle = on ? '#facc15' : '#64748b'
+      ctx.lineWidth = 2
+      const n = Math.max(6, Math.round(len / 14))
+      for (let k = 0; k < n; k++) {
+        const x = -L + (k + 0.5) * (len / n)
+        ctx.beginPath(); ctx.arc(x, 0, 9, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke()
+      }
+      ctx.setLineDash([5, 4]); ctx.strokeStyle = '#475569'; ctx.lineWidth = 1
+      ctx.beginPath(); ctx.moveTo(-L - 14, 0); ctx.lineTo(L + 14, 0); ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#f87171'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'
+      if (on) ctx.fillText('N', L + 22, 4)
+      if (on) { ctx.fillStyle = '#facc15'; ctx.fillText('I=' + (c.props.I ?? 2).toFixed(1) + 'A', 0, 22) }
+      ctx.restore()
+    },
+  },
   rail: {
     name: '金属导轨',
     defaults: () => ({ len: 360, gap: 120, angle: 0 }),
@@ -126,11 +184,9 @@ export const registry = {
       { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
     ],
     // 两根静态杆：gap 上沿一根、下沿一根（中间空，供导体棒滑动）
-    body: (x, y, p) => ({ type: 'vertices', vs: [
-      { x: -p.len / 2, y: -p.gap / 2 - 6 }, { x: p.len / 2, y: -p.gap / 2 - 6 },
-      { x: p.len / 2, y: -p.gap / 2 + 6 }, { x: -p.len / 2, y: -p.gap / 2 + 6 },
-      { x: -p.len / 2, y: p.gap / 2 - 6 }, { x: p.len / 2, y: p.gap / 2 - 6 },
-      { x: p.len / 2, y: p.gap / 2 + 6 }, { x: -p.len / 2, y: p.gap / 2 + 6 },
+    body: (x, y, p) => ({ type: 'compound', parts: [
+      { x: 0, y: -(p.gap ?? 120) / 2, w: p.len ?? 360, h: 12 },
+      { x: 0, y: (p.gap ?? 120) / 2, w: p.len ?? 360, h: 12 },
     ], options: { isStatic: true, friction: 0 }, label: 'rail' }),
     overlay: (ctx, c) => {
       const { len, gap } = c.props
@@ -387,12 +443,12 @@ export const registry = {
   },
   junction: {
     name: '接点',
-    defaults: () => ({ r: 5 }),
-    fields: [],
+    defaults: () => ({ r: 6 }),
+    fields: [{ key: 'r', label: '半径', unit: 'px', min: 4, max: 12, step: 1 }],
     body: null,
     overlay: (ctx, c) => {
       ctx.save()
-      ctx.beginPath(); ctx.arc(c.x, c.y, 5, 0, Math.PI * 2)
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.props.r ?? 6, 0, Math.PI * 2)
       ctx.fillStyle = '#c9d1d9'; ctx.fill()
       ctx.strokeStyle = 'rgba(219,230,245,.9)'; ctx.lineWidth = 1.2 * LW; ctx.stroke()
       ctx.restore(); ctx.lineWidth = 1 * LW
