@@ -182,7 +182,11 @@ export function snapToPin(x, y, objs, maxDist = 26) {
 // 并联自动成形：新放置的线段元件若与两个既有节点近似「正交搭接」
 // （元件两端分别在两节点的外侧、且与节点连线大致垂直、距离不远），自动改为 U 形三段并联。
 // 返回 { x, y, angle } 或 null（不适用）。
-export function autoParallel(x, y, len, angle, objs, maxGap = 260) {
+export function autoParallel(x, y, len, angle, objs, opts = {}) {
+  return null // 用户要求暂时关闭自动并联（m02132），后续按新方案重做
+
+  const allowWires = !!opts.allowWires   // 只有 wire 允许自动生成引线
+  const autoGrow = !!opts.autoGrow       // 只有 wire 允许自动加长
   const a = (angle * Math.PI) / 180
   const ux = Math.cos(a), uy = Math.sin(a)
   // 元件两端
@@ -219,6 +223,11 @@ export function autoParallel(x, y, len, angle, objs, maxGap = 260) {
       // 轴心沿线位置大致居中于节点对（允许偏 40%）
       const tmid = (t1 + t2) / 2
       if (Math.abs(tmid - d / 2) > Math.max(60, d * 0.45)) continue
+      // 非 wire：必须元件两端本身就贴近两个节点（贴合式并联），不加长不生引线
+      if (!allowWires) {
+        const cover = Math.min(t1, t2) <= 6 && Math.max(t1, t2) >= d - 6
+        if (!cover) continue
+      }
       const score = off + Math.abs(tmid - d / 2)
       if (score < bestScore) {
         bestScore = score
@@ -235,18 +244,21 @@ export function autoParallel(x, y, len, angle, objs, maxGap = 260) {
   // 元件中心对齐节点对中点（垂直方向保留用户给的偏移）
   const along = (x - mx) * best.nx + (y - my) * best.ny
   // 自动加长：覆盖两节点并各留 24px 引脚落脚
-  const newLen = Math.max(len, best.d + 48)
-  // 两根正交引线：从节点连到导线端子（沿节点连线方向）
-  const half = newLen / 2
-  const cx2 = x - along * best.nx, cy2 = y - along * best.ny
-  const pe1 = { x: cx2 - ux * half, y: cy2 - uy * half }
-  const pe2 = { x: cx2 + ux * half, y: cy2 + uy * half }
-  const mkWire = (n, e) => {
-    const wlen = Math.hypot(e.x - n.x, e.y - n.y)
-    const wang = Math.atan2(e.y - n.y, e.x - n.x) * 180 / Math.PI
-    return { x: (n.x + e.x) / 2, y: (n.y + e.y) / 2, angle: wang, len: wlen }
+  const newLen = autoGrow ? Math.max(len, best.d + 48) : len
+  // 两根正交引线：从节点连到导线端子（仅 wire）
+  let wires
+  if (allowWires) {
+    const half = newLen / 2
+    const cx2 = x - along * best.nx, cy2 = y - along * best.ny
+    const pe1 = { x: cx2 - ux * half, y: cy2 - uy * half }
+    const pe2 = { x: cx2 + ux * half, y: cy2 + uy * half }
+    const mkWire = (n, e) => {
+      const wlen = Math.hypot(e.x - n.x, e.y - n.y)
+      const wang = Math.atan2(e.y - n.y, e.x - n.x) * 180 / Math.PI
+      return { x: (n.x + e.x) / 2, y: (n.y + e.y) / 2, angle: wang, len: wlen }
+    }
+    wires = [mkWire(best.n1, pe1), mkWire(best.n2, pe2)]
   }
-  const wires = [mkWire(best.n1, pe1), mkWire(best.n2, pe2)]
   return { x: x - along * best.nx, y: y - along * best.ny, angle, len: newLen, parallel: true, wires }
 }
 

@@ -146,7 +146,6 @@ export default function App() {
       <Pallete tool={tool} onPick={pickTool} onLoadPreset={loadPreset} />
       <SceneIO sim={sim} onClose={() => {}} />
       <StatusBar sim={sim} />
-      {toast && <div className="toast">{toast}</div>}
       <Help open={showHelp} onClose={() => setShowHelp(false)} />
       {toast && <div className="toast">{toast}</div>}
     </div>
