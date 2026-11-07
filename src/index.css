@@ -1,0 +1,243 @@
+:root{
+  --bg:#070b12; --bg2:#0b1220; --panel:rgba(16,23,36,.86); --panel-solid:#101724;
+  --panel2:rgba(30,41,59,.72); --panel3:rgba(148,163,184,.10);
+  --fg:#e7eefc; --muted:#8494ad; --faint:#5c6b85;
+  --line:rgba(148,163,184,.16); --line-strong:rgba(148,163,184,.28);
+  --accent:#38bdf8; --accent2:#6366f1; --accent-soft:rgba(56,189,248,.14);
+  --ok:#34d399; --danger:#f87171; --warn:#fbbf24;
+  --radius:14px; --radius-sm:10px;
+  --shadow:0 10px 30px rgba(2,6,23,.55);
+  color-scheme: dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;overscroll-behavior:none}
+body{
+  font-family:system-ui,-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  background:
+    radial-gradient(900px 480px at 78% -12%,rgba(56,189,248,.16),transparent 70%),
+    radial-gradient(760px 420px at 6% 106%,rgba(99,102,241,.14),transparent 70%),
+    var(--bg);
+  color:var(--fg);
+  -webkit-tap-highlight-color:transparent;
+  -webkit-font-smoothing:antialiased;
+}
+.app{display:flex;flex-direction:column;height:100dvh;max-height:100dvh;overflow:hidden}
+
+/* ——— 顶栏 ——— */
+.topbar{
+  display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+  padding:.45rem .7rem;background:linear-gradient(180deg,rgba(16,23,36,.95),rgba(11,18,32,.86));
+  border-bottom:1px solid var(--line);backdrop-filter:blur(12px);z-index:40;
+}
+.topbar h1{display:flex;align-items:center;gap:.45rem;font-size:.98rem;font-weight:650;letter-spacing:.3px}
+.topbar h1::before{
+  content:"";width:16px;height:16px;border-radius:5px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 0 14px rgba(56,189,248,.55);
+}
+.topbar h1 small{color:var(--muted);font-weight:400;font-size:.7rem;letter-spacing:.6px;text-transform:uppercase}
+.toolbar{display:flex;gap:.4rem;flex-wrap:wrap;margin-left:auto;align-items:center}
+
+button,select,input{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);
+  border-radius:var(--radius-sm);font-size:.85rem;min-height:38px;touch-action:manipulation;
+  transition:background .16s,border-color .16s,box-shadow .16s,transform .08s;
+}
+button{padding:.35rem .72rem;cursor:pointer;user-select:none;font-weight:500}
+button:hover{border-color:var(--line-strong);background:rgba(51,65,85,.8)}
+button:active{transform:scale(.965)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{
+  background:linear-gradient(135deg,rgba(56,189,248,.95),rgba(99,102,241,.95));
+  border-color:transparent;color:#04121f;font-weight:700;
+  box-shadow:0 6px 18px rgba(56,189,248,.28);
+}
+button.primary:hover{box-shadow:0 8px 24px rgba(56,189,248,.4)}
+button.primary.running{background:linear-gradient(135deg,#f97316,#ef4444);color:#1a0703;box-shadow:0 6px 18px rgba(239,68,68,.3)}
+button.danger{color:var(--danger)}
+button.active{background:var(--accent-soft);border-color:rgba(56,189,248,.55);color:var(--accent);font-weight:600}
+button.block-btn{width:100%;margin-top:.6rem}
+
+/* ——— 主区 ——— */
+.main{flex:1;display:flex;min-height:0;position:relative}
+.canvas-wrap{
+  flex:1;position:relative;min-width:0;min-height:100px;overflow:hidden;
+  background:
+    radial-gradient(760px 420px at 68% -8%,rgba(56,189,248,.08),transparent 65%),
+    radial-gradient(640px 380px at 8% 108%,rgba(99,102,241,.07),transparent 65%),
+    #070c14;
+}
+.canvas-wrap > canvas{position:absolute;inset:0;touch-action:none;display:block;cursor:crosshair}
+.canvas-wrap .datapanel canvas{position:static;inset:auto;touch-action:auto}
+
+/* ——— 属性面板 ——— */
+.inspector{
+  width:264px;flex:none;background:linear-gradient(180deg,rgba(17,24,39,.96),rgba(11,18,32,.96));
+  border-left:1px solid var(--line);padding:.85rem;overflow-y:auto;
+}
+.insp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;gap:.5rem}
+.insp-head h2{font-size:.92rem;font-weight:650;letter-spacing:.2px}
+.insp-close{min-height:32px;min-width:32px;padding:0;border-radius:8px;color:var(--muted);background:transparent;border-color:transparent}
+.insp-close:hover{background:var(--panel2);color:var(--fg)}
+.inspector .field{margin-bottom:.75rem}
+.inspector label{display:flex;align-items:center;gap:.4rem;font-size:.76rem;color:var(--muted);margin-bottom:.32rem}
+.inspector label .fl{flex:1}
+.inspector .fnum{width:78px;min-height:30px;padding:.15rem .4rem;font-size:.8rem;text-align:right;
+  font-variant-numeric:tabular-nums;background:rgba(2,6,23,.6)}
+.inspector input[type=range]{width:100%;accent-color:var(--accent);min-height:22px;height:24px;background:transparent;border:0;padding:0}
+.insp-readout{
+  margin:.7rem 0;padding:.6rem .65rem;background:rgba(2,6,23,.55);
+  border:1px solid var(--line);border-radius:var(--radius-sm);font-size:.8rem;display:grid;gap:.22rem;
+  font-variant-numeric:tabular-nums;
+}
+.insp-readout span{display:inline-block;width:1.5em;color:var(--accent);font-weight:700;font-style:italic}
+
+/* ——— 底部元件栏 ——— */
+.pallete{
+  display:flex;gap:.55rem;flex-wrap:wrap;align-items:center;padding:.45rem .7rem;
+  background:linear-gradient(180deg,rgba(11,18,32,.9),rgba(16,23,36,.96));
+  border-top:1px solid var(--line);backdrop-filter:blur(12px);position:relative;z-index:20;flex:none;
+}
+.pal-scroll{display:flex;gap:.6rem;align-items:center;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:1px}
+.pal-scroll::-webkit-scrollbar{display:none}
+.pal-group{display:flex;gap:.25rem;align-items:center;flex:none}
+.pal-group + .pal-group{padding-left:.55rem;border-left:1px solid var(--line)}
+.pal-label{font-size:.66rem;color:var(--faint);margin-right:.15rem;user-select:none;letter-spacing:.8px;text-transform:uppercase}
+.pallete button{font-size:.78rem;padding:.25rem .55rem;min-height:34px;border-radius:9px;background:rgba(30,41,59,.55)}
+.pallete button.active{background:var(--accent-soft);color:var(--accent);border-color:rgba(56,189,248,.5);box-shadow:0 0 0 1px rgba(56,189,248,.18) inset}
+.pal-preset{flex:none;margin-left:.2rem;min-height:34px;font-size:.78rem;padding:.25rem .45rem;max-width:46vw;background:rgba(30,41,59,.55)}
+
+/* ——— 场景存取行 ——— */
+.sceneio{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;padding:.4rem .7rem;
+  background:rgba(9,14,24,.92);border-top:1px solid var(--line);position:relative;z-index:20;flex:none}
+.sceneio button{font-size:.76rem;min-height:32px;padding:.2rem .5rem;background:rgba(30,41,59,.45)}
+.sceneio .saved{display:inline-flex;gap:.2rem;align-items:center}
+
+/* ——— 状态栏 ——— */
+.statusbar{
+  position:relative;z-index:30;flex:none;padding:.35rem .8rem;background:rgba(7,11,18,.95);
+  border-top:1px solid var(--line);font-size:.72rem;color:var(--muted);
+  display:flex;gap:1rem;flex-wrap:wrap;align-items:center;font-variant-numeric:tabular-nums;
+}
+.statusbar .sb-time{color:var(--accent)}
+.statusbar .warn{color:var(--warn)}
+.statusbar .hint{margin-left:auto;opacity:.5}
+
+/* ——— 缩放控件 ——— */
+.zoomctl{position:absolute;right:.6rem;bottom:.6rem;display:flex;flex-direction:column;gap:.4rem;z-index:30}
+.zoomctl button{
+  width:40px;min-height:40px;padding:0;font-size:1.05rem;border-radius:11px;
+  background:rgba(16,23,36,.86);border:1px solid var(--line);color:var(--accent);
+  backdrop-filter:blur(8px);box-shadow:var(--shadow);
+}
+
+/* ——— HUD 面板（v-t / 动量） ——— */
+.datapanel{
+  pointer-events:none;position:absolute;left:.6rem;bottom:.6rem;width:min(46vw,258px);
+  background:linear-gradient(180deg,rgba(16,23,36,.88),rgba(11,18,32,.86));
+  border:1px solid var(--line);border-radius:var(--radius);padding:.5rem .6rem;z-index:10;
+  backdrop-filter:blur(10px);box-shadow:var(--shadow);
+}
+.dp-head{display:flex;justify-content:space-between;gap:.4rem;font-size:.68rem;color:var(--muted);margin-bottom:.3rem;align-items:center}
+.dp-head strong{color:#cfe3ff;font-weight:600;letter-spacing:.2px}
+.dp-read{white-space:nowrap;color:var(--ok);font-variant-numeric:tabular-nums}
+.datapanel canvas{width:100%;height:80px;display:block}
+
+.momentumpanel{
+  pointer-events:none;position:absolute;left:.6rem;bottom:8.6rem;z-index:10;
+  background:linear-gradient(180deg,rgba(16,23,36,.88),rgba(11,18,32,.86));
+  border:1px solid var(--line);border-radius:var(--radius);padding:.5rem .65rem;
+  font-size:11px;color:#dbe6f5;min-width:210px;backdrop-filter:blur(10px);box-shadow:var(--shadow);
+}
+.mp-table{border-collapse:collapse;width:100%}
+.mp-table th,.mp-table td{padding:1.5px 6px;text-align:right;font-variant-numeric:tabular-nums}
+.mp-table thead th{color:var(--faint);font-weight:500}
+.mp-total td{border-top:1px solid var(--line-strong);color:var(--ok);font-weight:700}
+.mp-note{margin-top:4px;color:var(--faint)}
+
+/* ——— 抽屉遮罩 ——— */
+.backdrop{display:none;position:absolute;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(2px);z-index:50;border:0;padding:0;min-height:0;border-radius:0;animation:fade .18s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* ——— 平板 / 手机 ——— */
+@media (max-width:900px){
+  .inspector{
+    position:absolute;right:0;top:0;bottom:0;z-index:60;width:272px;
+    box-shadow:-18px 0 40px rgba(2,6,23,.6);transform:translateX(102%);
+    transition:transform .24s cubic-bezier(.4,0,.2,1);pointer-events:none;
+  }
+  .inspector.open{transform:none;pointer-events:auto}
+  .backdrop{display:block;position:absolute}
+}
+@media (max-width:560px){
+  .topbar{padding:.35rem .5rem;gap:.4rem}
+  .topbar h1{font-size:.9rem}
+  .toolbar button{min-height:38px;padding:.25rem .5rem;font-size:.78rem}
+  .datapanel{width:min(60vw,212px)}
+  .datapanel canvas{height:62px}
+  .momentumpanel{bottom:8rem;min-width:190px;font-size:10px}
+  .pallete{padding:.35rem .4rem;gap:.3rem}
+  .pallete button{font-size:.74rem;padding:.2rem .45rem}
+  .pal-preset{max-width:40vw}
+  .zoomctl{bottom:5.8rem}
+  .statusbar .hint{display:none}
+  .inspector{width:min(82vw,286px)}
+  .sceneio{padding:.3rem .4rem}
+  .sceneio button{min-height:30px;font-size:.72rem}
+}
+
+/* ——— 触屏：加大点击目标 ——— */
+@media (pointer:coarse){
+  .pallete button{min-height:40px;padding:.35rem .55rem}
+  .pal-preset{min-height:40px}
+  .toolbar button{min-height:40px}
+  .zoomctl button{width:44px;min-height:44px}
+  .sceneio button{min-height:34px}
+}
+/* ——— 矮屏（手机横屏 / 分屏）：压缩面板 ——— */
+@media (max-height:560px){
+  .topbar{padding:.28rem .5rem}
+  .topbar h1 small{display:none}
+  .pallete{padding:.28rem .4rem;gap:.3rem}
+  .pallete button{min-height:32px;padding:.15rem .42rem;font-size:.72rem}
+  .pal-label{display:none}
+  .momentumpanel{display:none}
+  .datapanel{width:min(36vw,190px)}
+  .datapanel canvas{height:52px}
+  .zoomctl{bottom:.4rem;right:.4rem;flex-direction:row}
+  .statusbar .hint{display:none}
+  .sceneio{display:none}
+}
+
+/* ——— 帮助弹窗 ——— */
+.helpwrap{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;
+  background:rgba(3,7,14,.66);backdrop-filter:blur(6px);padding:1rem}
+.helpbox{width:min(560px,94vw);max-height:86dvh;overflow:auto;padding:1.1rem 1.2rem;
+  border-radius:var(--radius);border:1px solid var(--line);background:linear-gradient(180deg,rgba(17,24,39,.98),rgba(9,14,26,.98));
+  box-shadow:0 30px 70px rgba(2,6,23,.7)}
+.helpbox h2{margin:0 0 .7rem;font-size:1rem;letter-spacing:.5px}
+.helpbox table{width:100%;border-collapse:collapse;font-size:.8rem}
+.helpbox th{text-align:left;padding:.4rem .5rem;color:var(--accent);font-weight:600;white-space:nowrap;
+  border-bottom:1px solid var(--line);vertical-align:top}
+.helpbox td{padding:.4rem .5rem;color:var(--muted);border-bottom:1px solid var(--line)}
+.helptip{font-size:.75rem;color:var(--faint);margin:.8rem 0}
+.helpbox button{width:100%}
+
+/* 速度倍率选择 */
+.toolbar .speed{display:inline-flex;align-items:center;gap:.25rem;padding:0 .35rem 0 .5rem;
+  border-radius:10px;border:1px solid var(--line);background:var(--panel2);min-height:34px}
+.toolbar .speed span{font-size:.78rem;color:var(--muted)}
+.toolbar .speed select{border:none;background:transparent;color:var(--fg);font:inherit;
+  font-size:.78rem;font-variant-numeric:tabular-nums;padding:.15rem .1rem;min-height:26px;outline:none}
+
+/* 轻提示 */
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 58px);transform:translateX(-50%);
+  z-index:200;padding:.5rem .85rem;border-radius:10px;background:rgba(11,18,32,.94);
+  border:1px solid var(--line);color:var(--fg);font-size:.8rem;box-shadow:0 8px 24px rgba(0,0,0,.45);
+  pointer-events:none;animation:toastin .18s ease-out}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* 触屏上的关闭按钮加大到 44px，避免点不中 */
+@media (pointer:coarse){
+  .insp-close{min-height:44px;min-width:44px;font-size:1.05rem;margin:-.2rem -.25rem -.2rem 0}
+}

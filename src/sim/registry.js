@@ -1,0 +1,700 @@
+import Matter from 'matter-js'
+import { solve } from './circuit.js'
+
+// 叠加层线宽随相机缩放：SimCanvas 每帧调用 setLineScale(view.scale)
+export let LW = 1
+export function setLineScale(s) { LW = 1 / (s || 1) }
+// 元件注册表：新增元件只需在此登记
+// fields: 属性面板自动生成用
+export const registry = {
+  block: {
+    name: '物块',
+    defaults: () => ({ m: 1, mu: 0.2, rest: 0.2, v0x: 0, v0y: 0 }),
+    fields: [
+      { key: 'm', label: '质量', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
+      { key: 'mu', label: '摩擦系数 μ', min: 0, max: 1, step: 0.05 },
+      { key: 'rest', label: '碰撞弹性', unit: '', min: 0, max: 1, step: 0.1 },
+      { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+    ],
+    body: (x, y, p) => ({ type: 'rectangle', w: 50, h: 30,
+      options: { density: 0.001, friction: 0, frictionStatic: 0, restitution: p.rest ?? 0.2 }, label: 'block' }),
+  },
+  particle: {
+    name: '质点',
+    defaults: () => ({ m: 1, r: 7, v0x: 0, v0y: 0 }),
+    fields: [
+      { key: 'm', label: '质量', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
+      { key: 'r', label: '半径', unit: 'px', min: 3, max: 30, step: 1 },
+      { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+    ],
+    body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0 }, label: 'particle' }),
+  },
+  ball: {
+    name: '小球',
+    defaults: () => ({ m: 1, r: 20, rest: 0.8, v0x: 0, v0y: 0 }),
+    fields: [
+      { key: 'm', label: '质量', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
+      { key: 'r', label: '半径', unit: 'px', min: 8, max: 60, step: 1 },
+      { key: 'rest', label: '弹性', unit: '', min: 0, max: 1, step: 0.1 },
+      { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+    ],
+    body: (x, y, p) => ({ type: 'circle', r: p.r,
+      options: { density: 0.001, friction: 0, restitution: p.rest ?? 0.8 }, label: 'ball' }),
+  },
+  incline: {
+    name: '斜面',
+    defaults: () => ({ angle: 30, len: 320 }),
+    fields: [
+      { key: 'angle', label: '倾角 θ', unit: '°', min: 5, max: 75, step: 1 },
+      { key: 'len', label: '斜面长度', unit: 'px', min: 120, max: 800, step: 10 },
+    ],
+    // 绘制为真题里的直角三角形（见 sim/incline.js），碰撞体是沿斜边放置的静态厚板：
+    // fromVertices 依赖 poly-decomp，三顶点凸包不可靠会穿模；旋转矩形完全稳定。
+    body: (x, y, p) => {
+      const ang = ((p.angle ?? 30) * Math.PI) / 180
+      return { type: 'rotRect', w: p.len ?? 320, h: 6, angle: ang,
+        options: { isStatic: true, friction: 0 }, label: 'incline' }
+    },
+  },
+  ground: {
+    name: '地面',
+    defaults: () => ({}),
+    fields: [],
+    body: (x, y) => ({ type: 'rectangle', w: 1200, h: 20,
+      options: { isStatic: true, friction: 0 }, label: 'ground' }),
+  },
+  track: {
+    name: '桌面/轨道',
+    defaults: () => ({ len: 320 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 120, max: 900, step: 10 },
+    ],
+    body: (x, y, p) => ({ type: 'rectangle', w: p.len ?? 320, h: 14,
+      options: { isStatic: true, friction: 0 }, label: 'track' }),
+    overlay: (ctx, c) => {
+      const { len } = c.props
+      const x = c.x, y = c.y, w = len ?? 320
+      ctx.save()
+      ctx.strokeStyle = 'rgba(148,163,184,.55)'; ctx.lineWidth = 1 * LW
+      ctx.beginPath()
+      for (let i = -w / 2 + 10; i < w / 2; i += 16) {
+        ctx.moveTo(x + i, y + 7)
+        ctx.lineTo(x + i - 7, y + 16)
+      }
+      ctx.stroke()
+      ctx.restore()
+    },
+  },
+  pendulum: {
+    name: '单摆',
+    defaults: () => ({ len: 140 }),
+    fields: [{ key: 'len', label: '摆长', unit: 'px', min: 40, max: 500, step: 10 }],
+    body: null,
+    overlay: (ctx, c, all) => {
+      const L = c.props.len ?? 140
+      const tgt = c._target != null ? all.find(o => o.id === c._target) : null
+      ctx.save()
+      if (tgt?.body) {
+        ctx.strokeStyle = 'rgba(201,162,39,.9)'; ctx.lineWidth = 1 * LW; ctx.setLineDash([6, 4])
+        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(tgt.body.position.x, tgt.body.position.y); ctx.stroke()
+        ctx.setLineDash([])
+      } else {
+        ctx.strokeStyle = 'rgba(201,162,39,.5)'; ctx.setLineDash([4, 6])
+        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(c.x, c.y + L); ctx.stroke(); ctx.setLineDash([])
+        ctx.beginPath(); ctx.arc(c.x, c.y + L, 10, 0, 7); ctx.stroke()
+      }
+      // 悬点符号
+      ctx.fillStyle = '#c9a227'
+      ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 7); ctx.fill()
+      ctx.strokeStyle = 'rgba(201,162,39,.8)'
+      ctx.beginPath(); ctx.moveTo(c.x - 9, c.y - 6); ctx.lineTo(c.x + 9, c.y - 6); ctx.stroke()
+      ctx.fillStyle = 'rgba(219,230,245,.75)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'
+      const Tm = 2 * Math.PI * Math.sqrt(L / 100 / 9.8)
+      ctx.fillText('L=' + (L / 100).toFixed(2) + 'm  T=' + Tm.toFixed(2) + 's', c.x, c.y + 16)
+      ctx.restore()
+    },
+  },
+  conveyor: {
+    name: '传送带',
+    defaults: () => ({ len: 320, v: 2 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 120, max: 900, step: 10 },
+      { key: 'v', label: '带速（正=向右）', unit: 'm/s', min: -8, max: 8, step: 0.5 },
+    ],
+    body: (x, y, p) => ({ type: 'rectangle', w: p.len ?? 320, h: 16,
+      options: { isStatic: true, friction: 0 }, label: 'conveyor' }),
+    overlay: (ctx, c) => {
+      const len = c.props.len ?? 320, v = c.props.v ?? 0
+      const x = c.x, y = c.y, rr = 11, half = len / 2
+      const l = x - half + rr, rt = x + half - rr   // 滚筒圆心
+      const dir = Math.sign(v) || 1
+      const t = performance.now() / 1000
+      ctx.save()
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+      // 皮带外轮廓（两条带面 + 两端半圆）——一条闭合路径，更像真题里的传动带
+      ctx.strokeStyle = 'rgba(219,230,245,.9)'; ctx.lineWidth = 1.4 * LW
+      ctx.beginPath()
+      ctx.moveTo(l, y - rr); ctx.lineTo(rt, y - rr)
+      ctx.arc(rt, y, rr, -Math.PI / 2, Math.PI / 2)
+      ctx.lineTo(l, y + rr)
+      ctx.arc(l, y, rr, Math.PI / 2, Math.PI * 3 / 2)
+      ctx.closePath(); ctx.stroke()
+      // 内部浅填充
+      ctx.fillStyle = 'rgba(56,189,248,.05)'; ctx.fill()
+      // 滚筒：填充圆 + 4 辐条 + 中心轴点（转动相位随带速）
+      const ph = (t * v * 12) % (Math.PI * 2)
+      for (const cx of [l, rt]) {
+        ctx.beginPath(); ctx.arc(cx, y, rr - 2.5, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(56,189,248,.12)'; ctx.fill()
+        ctx.strokeStyle = 'rgba(56,189,248,.95)'; ctx.lineWidth = 1.2 * LW; ctx.stroke()
+        ctx.lineWidth = 1 * LW
+        for (let k = 0; k < 4; k++) {
+          const a2 = ph + (k * Math.PI) / 2
+          ctx.beginPath(); ctx.moveTo(cx, y)
+          ctx.lineTo(cx + Math.cos(a2) * (rr - 2.5), y + Math.sin(a2) * (rr - 2.5)); ctx.stroke()
+        }
+        ctx.beginPath(); ctx.arc(cx, y, 1.8, 0, 7); ctx.fillStyle = 'rgba(56,189,248,.95)'; ctx.fill()
+      }
+      // 带面斜纹花纹（在上下带面上，随带速平移，直观看出转向）
+      ctx.strokeStyle = 'rgba(56,189,248,.6)'; ctx.lineWidth = 1 * LW
+      const step = 24, span = rt - l
+      const off = ((t * Math.abs(v) * 40) % step) * dir
+      for (let d = off; Math.abs(d) < span; d += step * dir) {
+        const sx = l + d
+        if (sx < l || sx > rt) continue
+        ctx.beginPath(); ctx.moveTo(sx, y - rr + 2); ctx.lineTo(sx + 6 * dir, y - rr + 5)
+        ctx.moveTo(sx, y + rr - 2); ctx.lineTo(sx + 6 * dir, y + rr - 5); ctx.stroke()
+      }
+      // 支架腿（真题画法：两条短垂线 + 底座）
+      ctx.strokeStyle = 'rgba(139,148,158,.8)'; ctx.lineWidth = 1.2 * LW
+      for (const lx of [x - half * 0.32, x + half * 0.32]) {
+        ctx.beginPath(); ctx.moveTo(lx, y + rr); ctx.lineTo(lx, y + rr + 16)
+        ctx.moveTo(lx - 7, y + rr + 16); ctx.lineTo(lx + 7, y + rr + 16); ctx.stroke()
+      }
+      // 速度标注 + 方向箭头
+      const ax = x - 26 * dir, ay = y - rr - 16
+      ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.4 * LW
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 46 * dir, ay)
+      ctx.moveTo(ax + 46 * dir, ay); ctx.lineTo(ax + 38 * dir, ay - 4)
+      ctx.moveTo(ax + 46 * dir, ay); ctx.lineTo(ax + 38 * dir, ay + 4); ctx.stroke()
+      ctx.fillStyle = 'rgba(250,204,21,.95)'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
+      ctx.font = `${12 * LW}px system-ui`
+      ctx.fillText(`v = ${v.toFixed(1)} m/s`, x, ay - 6)
+      ctx.restore()
+    },
+  },
+
+  constantForce: {
+    name: '恒力 F',
+    defaults: () => ({ fx: 10, fy: 0 }),
+    fields: [
+      { key: 'fx', label: '水平分量 Fx', unit: 'N', min: -50, max: 50, step: 1 },
+      { key: 'fy', label: '竖直分量 Fy', unit: 'N', min: -50, max: 50, step: 1 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => {
+      const { fx, fy } = c.props
+      // 到受力物体的虚线（表示力作用在谁身上）
+      const t = c._target != null ? all.find(o => o.id === c._target) : null
+      if (t?.body) {
+        ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(255,95,86,.45)'; ctx.lineWidth = 1 * LW
+        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(t.body.position.x, t.body.position.y); ctx.stroke(); ctx.restore()
+      }
+      const mag = Math.hypot(fx, fy) || 1
+      const L = 26 + Math.min(46, mag * 1.6)
+      drawArrow(ctx, { x: c.x, y: c.y }, { x: c.x + fx / mag * L, y: c.y - fy / mag * L }, '#ff5f56')
+      ctx.fillStyle = '#ff8b84'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'
+      ctx.fillText('F=' + mag.toFixed(0) + 'N', c.x, c.y + 20)
+    },
+  },
+  charge: {
+    name: '点电荷',
+    defaults: () => ({ q: 1, m: 0.5, r: 10, v0x: 0, v0y: 0 }),
+    fields: [
+      { key: 'q', label: '电荷量 q', unit: 'μC', min: -20, max: 20, step: 0.5 },
+      { key: 'm', label: '质量 m', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
+      { key: 'r', label: '半径', unit: 'px', min: 6, max: 40, step: 1 },
+      { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+    ],
+    // 带电粒子默认忽略重力（高中题：「不计重力」）
+    body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0, gravityScale: 0 }, label: 'charge' }),
+  },
+  uniformB: {
+    name: '匀强磁场 B',
+    defaults: () => ({ w: 240, h: 180, bz: 2 }),
+    fields: [
+      { key: 'w', label: '区域宽', unit: 'px', min: 80, max: 500, step: 10 },
+      { key: 'h', label: '区域高', unit: 'px', min: 80, max: 400, step: 10 },
+      { key: 'bz', label: '磁感应强度 B（+外/−内）', unit: 'T', min: -20, max: 20, step: 0.1 },
+    ],
+    body: null,
+    overlay: (ctx, c, components) => {
+      const { w, h, bz } = c.props
+      const x = c.x, y = c.y
+      ctx.save()
+      ctx.strokeStyle = '#7ee787'; ctx.fillStyle = 'rgba(126,231,135,.07)'; ctx.lineWidth = 1.5 * LW
+      ctx.fillRect(x - w/2, y - h/2, w, h); ctx.strokeRect(x - w/2, y - h/2, w, h)
+      ctx.fillStyle = '#7ee787'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'
+      ctx.fillText('B = ' + bz.toFixed(2) + ' T ' + (bz >= 0 ? '⊙ 垂直纸面向外' : '⊗ 垂直纸面向内'), x, y - h/2 - 8)
+      ctx.globalAlpha = 0.5
+      for (let gx = -w/2 + 20; gx < w/2; gx += 40)
+        for (let gy = -h/2 + 20; gy < h/2; gy += 40) {
+          ctx.beginPath()
+          if (bz >= 0) { ctx.arc(x + gx, y + gy, 3.5, 0, 7); ctx.stroke() }
+          else { ctx.arc(x + gx, y + gy, 5, 0, 7); ctx.moveTo(x + gx - 3.5, y + gy - 3.5); ctx.lineTo(x + gx + 3.5, y + gy + 3.5); ctx.moveTo(x + gx + 3.5, y + gy - 3.5); ctx.lineTo(x + gx - 3.5, y + gy + 3.5); ctx.stroke() }
+        }
+      // 区内带电粒子的回旋参数 r = mv/(qB)、T = 2πm/(qB)
+      const B = Math.abs(bz)
+      if (B > 0.01 && components) {
+        for (const o of components) {
+          if (!o.body || o.body.isStatic || o.type !== 'charge') continue
+          const p = o.body.position
+          if (Math.abs(p.x - x) > w / 2 || Math.abs(p.y - y) > h / 2) continue
+          const q = Math.abs(o.props.q ?? 1) * 1e-6
+          if (q < 1e-9) continue
+          const v = Math.hypot(o.body.velocity.x, o.body.velocity.y) * 0.6
+          const m = o.body.mass
+          const rr = (m * v) / (q * B)
+          const T = (2 * Math.PI * m) / (q * B)
+          ctx.globalAlpha = 0.95
+          ctx.fillStyle = '#7ee787'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'
+          ctx.fillText('r = mv/qB = ' + rr.toFixed(2) + ' m   T = ' + T.toFixed(2) + ' s', x, y + h / 2 + 18)
+          break
+        }
+      }
+      ctx.restore()
+    },
+  },
+  lightSource: {
+    name: '光源',
+    defaults: () => ({ rays: 12, spread: 60, angle: 0, color: '#ffd166' }),
+    fields: [
+      { key: 'rays', label: '光线条数', min: 1, max: 40, step: 1 },
+      { key: 'spread', label: '发散角', unit: '°', min: 0, max: 360, step: 5 },
+      { key: 'angle', label: '中心方向', unit: '°', min: -180, max: 180, step: 5 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      ctx.fillStyle = '#ffd166'
+      ctx.beginPath(); ctx.arc(c.x, c.y, 5, 0, 7); ctx.fill()
+      ctx.strokeStyle = 'rgba(255,209,102,.5)'; ctx.lineWidth = 1 * LW
+      ctx.beginPath(); ctx.arc(c.x, c.y, 9, 0, 7); ctx.stroke(); ctx.lineWidth = 1 * LW
+    },
+  },
+  mirror: {
+    name: '平面镜',
+    defaults: () => ({ len: 140, angle: 90 }),
+    fields: [
+      { key: 'len', label: '镜面长度', unit: 'px', min: 40, max: 400, step: 10 },
+      { key: 'angle', label: '倾角', unit: '°', min: -180, max: 180, step: 5 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const a = ((c.props.angle ?? 0) * Math.PI) / 180, L = c.props.len ?? 140
+      const dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2
+      ctx.strokeStyle = '#9ecbff'; ctx.lineWidth = 2 * LW
+      ctx.beginPath(); ctx.moveTo(c.x - dx, c.y - dy); ctx.lineTo(c.x + dx, c.y + dy); ctx.stroke()
+      // 背面斜线（表示反射面）
+      const nx = Math.sin(a), ny = -Math.cos(a)
+      ctx.strokeStyle = 'rgba(158,203,255,.5)'; ctx.lineWidth = 1 * LW
+      for (let t = -L / 2 + 8; t < L / 2; t += 12) {
+        const px = c.x + Math.cos(a) * t, py = c.y + Math.sin(a) * t
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + nx * 7, py + ny * 7); ctx.stroke()
+      }
+      ctx.lineWidth = 1 * LW
+    },
+  },
+  lens: {
+    name: '凸透镜',
+    defaults: () => ({ len: 140, f: 120, angle: 90 }),
+    fields: [
+      { key: 'len', label: '透镜高度', unit: 'px', min: 40, max: 400, step: 10 },
+      { key: 'f', label: '焦距 f', unit: 'px', min: 30, max: 400, step: 10 },
+      { key: 'angle', label: '摆放角', unit: '°', min: -180, max: 180, step: 5 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const a = ((c.props.angle ?? 0) * Math.PI) / 180, L = c.props.len ?? 140
+      const dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2
+      const nx = Math.sin(a), ny = -Math.cos(a)
+      ctx.strokeStyle = '#7ee787'; ctx.lineWidth = 2 * LW
+      ctx.beginPath()
+      ctx.moveTo(c.x - dx, c.y - dy)
+      ctx.quadraticCurveTo(c.x + nx * 10, c.y + ny * 10, c.x + dx, c.y + dy)
+      ctx.quadraticCurveTo(c.x - nx * 10, c.y - ny * 10, c.x - dx, c.y - dy)
+      ctx.stroke()
+      ctx.strokeStyle = 'rgba(126,231,135,.35)'; ctx.lineWidth = 1 * LW
+      ctx.beginPath(); ctx.moveTo(c.x - nx * 8, c.y - ny * 8); ctx.lineTo(c.x + nx * 8, c.y + ny * 8); ctx.stroke()
+      ctx.fillStyle = '#7ee787'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText('f=' + (c.props.f ?? 120), c.x + nx * 18, c.y + ny * 18)
+      ctx.lineWidth = 1 * LW
+    },
+  },
+  screen: {
+    name: '光屏',
+    defaults: () => ({ len: 160, angle: 90 }),
+    fields: [
+      { key: 'len', label: '屏幕长度', unit: 'px', min: 40, max: 400, step: 10 },
+      { key: 'angle', label: '倾角', unit: '°', min: -180, max: 180, step: 5 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const a = ((c.props.angle ?? 0) * Math.PI) / 180, L = c.props.len ?? 160
+      const dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2
+      ctx.strokeStyle = '#c9d1d9'; ctx.lineWidth = 3 * LW
+      ctx.beginPath(); ctx.moveTo(c.x - dx, c.y - dy); ctx.lineTo(c.x + dx, c.y + dy); ctx.stroke()
+      ctx.lineWidth = 1 * LW
+    },
+  },
+  battery: {
+    name: '电源',
+    defaults: () => ({ E: 6, r: 0.5, len: 90, angle: 0 }),
+    fields: [
+      { key: 'E', label: '电动势 E', unit: 'V', min: 0.5, max: 24, step: 0.5 },
+      { key: 'r', label: '内阻 r', unit: 'Ω', min: 0.05, max: 10, step: 0.05 },
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  resistor: {
+    name: '定值电阻',
+    defaults: () => ({ R: 10, len: 90, angle: 0 }),
+    fields: [
+      { key: 'R', label: '阻值 R', unit: 'Ω', min: 0.5, max: 200, step: 0.5 },
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  rheostat: {
+    name: '滑动变阻器',
+    defaults: () => ({ R: 20, len: 110, angle: 0 }),
+    fields: [
+      { key: 'R', label: '接入阻值', unit: 'Ω', min: 0, max: 200, step: 1 },
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  bulb: {
+    name: '小灯泡',
+    defaults: () => ({ R: 12, len: 90, angle: 0 }),
+    fields: [
+      { key: 'R', label: '电阻 R', unit: 'Ω', min: 1, max: 100, step: 0.5 },
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  switch: {
+    name: '开关',
+    defaults: () => ({ closed: false, len: 80, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 200, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  ammeter: {
+    name: '电流表',
+    defaults: () => ({ len: 90, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  voltmeter: {
+    name: '电压表',
+    defaults: () => ({ len: 90, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  wire: {
+    name: '导线',
+    defaults: () => ({ len: 90, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 20, max: 400, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  spring: {
+    name: '弹簧',
+    defaults: () => ({ k: 50, restLen: 120 }),
+    fields: [
+      { key: 'k', label: '劲度系数 k', unit: 'N/m', min: 5, max: 500, step: 5 },
+      { key: 'restLen', label: '原长', unit: 'px', min: 40, max: 400, step: 10 },
+    ],
+    body: null,
+    force: (c, components) => pairForce(c, components, (d, p) => -p.k * ((d - p.restLen) / 100)),
+    overlay: (ctx, c, components) => drawSpring(ctx, c, components),
+  },
+  rope: {
+    name: '轻绳',
+    defaults: () => ({ len: 150 }),
+    fields: [{ key: 'len', label: '绳长', unit: 'px', min: 40, max: 500, step: 10 }],
+    body: null,
+    overlay: (ctx, c, components) => {
+      const ends = pairEnds(c, components); if (!ends) return
+      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.5 * LW
+      ctx.beginPath(); ctx.moveTo(ends[0].body.position.x, ends[0].body.position.y)
+      ctx.lineTo(ends[1].body.position.x, ends[1].body.position.y); ctx.stroke(); ctx.lineWidth = 1 * LW
+    },
+  },
+  pulley: {
+    name: '定滑轮',
+    defaults: () => ({ r: 22, len: 320 }),
+    fields: [
+      { key: 'r', label: '半径', unit: 'px', min: 10, max: 60, step: 2 },
+      { key: 'len', label: '绳总长', unit: 'px', min: 100, max: 800, step: 20 },
+    ],
+    body: (x, y, p) => ({ type: 'circle', r: p.r,
+      options: { isStatic: true, friction: 0 }, label: 'pulley' }),
+    // 跨过滑轮的绳：两端到滑轮距离之和 ≤ len（硬约束，见 sim/constraints.js）
+    overlay: (ctx, c, components) => {
+      const ends = pairEnds(c, components)
+      const rad = c.props.r ?? 22
+      ctx.save()
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+      // 绳：从物体到轮缘切点附近（沿径向留在轮缘上，不插进圆心）
+      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.5 * LW
+      if (ends) for (const end of ends) {
+        const b = end.body.position
+        const dx = b.x - c.x, dy = b.y - c.y, d = Math.hypot(dx, dy) || 1
+        const tx = c.x + dx / d * rad, ty = c.y + dy / d * rad   // 轮缘上的点
+        ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(tx, ty); ctx.stroke()
+      }
+      // 轮体：外圈 + 内圈 + 6 根轮辐 + 中心轴（真题滑轮画法）
+      ctx.strokeStyle = 'rgba(219,230,245,.9)'; ctx.lineWidth = 1.4 * LW
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad, 0, Math.PI * 2); ctx.stroke()
+      ctx.lineWidth = 1 * LW
+      ctx.beginPath(); ctx.arc(c.x, c.y, rad * 0.72, 0, Math.PI * 2); ctx.stroke()
+      const spin = ends ? 0 : 0   // 定滑轮不转，静止画
+      for (let k = 0; k < 6; k++) {
+        const a2 = spin + (k * Math.PI) / 3
+        ctx.beginPath()
+        ctx.moveTo(c.x + Math.cos(a2) * rad * 0.72, c.y + Math.sin(a2) * rad * 0.72)
+        ctx.lineTo(c.x + Math.cos(a2) * rad, c.y + Math.sin(a2) * rad); ctx.stroke()
+      }
+      ctx.beginPath(); ctx.arc(c.x, c.y, 3.5, 0, 7)
+      ctx.fillStyle = 'rgba(219,230,245,.95)'; ctx.fill()
+      // 绳越过的顶部高亮（绳与轮接触处稍微加粗一点黄）
+      if (ends) {
+        ctx.strokeStyle = 'rgba(201,162,39,.55)'; ctx.lineWidth = 2.4 * LW
+        ctx.beginPath(); ctx.arc(c.x, c.y, rad + 0.8, 0, Math.PI * 2); ctx.stroke()
+      }
+      ctx.restore(); ctx.lineWidth = 1 * LW
+    },
+  },
+  uniformE: {
+    name: '匀强电场 E',
+    defaults: () => ({ w: 220, h: 160, ex: 0, ey: 100 }),  // N/C，ey>0 指上（物理坐标）
+    fields: [
+      { key: 'w', label: '区域宽', unit: 'px', min: 80, max: 500, step: 10 },
+      { key: 'h', label: '区域高', unit: 'px', min: 80, max: 400, step: 10 },
+      { key: 'ex', label: 'Ex', unit: 'N/C', min: -5000, max: 5000, step: 10 },
+      { key: 'ey', label: 'Ey', unit: 'N/C', min: -5000, max: 5000, step: 10 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const { w, h, ex, ey } = c.props
+      const x = c.x, y = c.y
+      ctx.save()
+      ctx.strokeStyle = '#d2a8ff'; ctx.fillStyle = 'rgba(210,168,255,.06)'; ctx.lineWidth = 1.5 * LW
+      ctx.fillRect(x - w/2, y - h/2, w, h); ctx.strokeRect(x - w/2, y - h/2, w, h)
+      ctx.fillStyle = '#d2a8ff'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'
+      ctx.fillText('E = (' + ex.toFixed(0) + ', ' + ey.toFixed(0) + ') N/C', x, y - h/2 - 8)
+      const mag = Math.hypot(ex, ey)
+      if (mag > 1) {
+        const k = 22 / mag
+        for (let gx = -w/2 + 30; gx < w/2; gx += 55)
+          for (let gy = -h/2 + 30; gy < h/2; gy += 55) {
+            ctx.globalAlpha = 0.65
+            drawArrow(ctx, { x: x + gx - ex * k / 2, y: y + gy + ey * k / 2 },
+              { x: x + gx + ex * k / 2, y: y + gy - ey * k / 2 }, '#d2a8ff')
+          }
+      }
+      ctx.restore()
+    },
+  },
+}
+
+export function drawArrow(ctx, from, to, color) {
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5 * LW
+  ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke()
+  const a = Math.atan2(to.y - from.y, to.x - from.x)
+  ctx.beginPath(); ctx.moveTo(to.x, to.y)
+  ctx.lineTo(to.x - 10 * Math.cos(a - 0.4), to.y - 10 * Math.sin(a - 0.4))
+  ctx.lineTo(to.x - 10 * Math.cos(a + 0.4), to.y - 10 * Math.sin(a + 0.4))
+  ctx.fill(); ctx.lineWidth = 1 * LW
+}
+// 弹簧/绳：连接最近的两个动态刚体，F = f(距离, 参数)
+function pairEnds(c, components) {
+  const dyn = components.filter(o => o.body && !o.body.isStatic)
+  if (dyn.length < 2) return null
+  // 放置时确定的连接对象优先（避免多个物体时「最近两体」随运动变化导致绳子跳绑）
+  const pa = c.props._a != null ? dyn.find(o => o.id === c.props._a) : null
+  const pb = c.props._b != null ? dyn.find(o => o.id === c.props._b) : null
+  if (pa && pb && pa !== pb) return [pa, pb]
+  const sorted = dyn.slice().sort((a, b) =>
+    Math.hypot(a.body.position.x - c.x, a.body.position.y - c.y) -
+    Math.hypot(b.body.position.x - c.x, b.body.position.y - c.y))
+  return [sorted[0], sorted[1]]
+}
+function pairForce(c, components, fn) {
+  const ends = pairEnds(c, components); if (!ends) return
+  const [a, b] = ends
+  const dx = b.body.position.x - a.body.position.x
+  const dy = b.body.position.y - a.body.position.y
+  const d = Math.max(Math.hypot(dx, dy), 1)
+  const F = fn(d, c.props) * 1e-4
+  const ux = dx / d, uy = dy / d
+  Matter.Body.applyForce(a.body, a.body.position, { x: -F * ux, y: -F * uy })
+  Matter.Body.applyForce(b.body, b.body.position, { x: F * ux, y: F * uy })
+}
+export function drawSpring(ctx, c, components) {
+  const ends = pairEnds(c, components); if (!ends) return
+  const [a, b] = ends
+  const ax = a.body.position.x, ay = a.body.position.y
+  const dx = b.body.position.x - ax, dy = b.body.position.y - ay
+  const nx = -dy, ny = dx, m = Math.hypot(nx, ny) || 1
+  ctx.strokeStyle = '#ffd76e'; ctx.lineWidth = 2 * LW; ctx.beginPath(); ctx.moveTo(ax, ay)
+  const coils = 12
+  for (let i = 1; i < coils * 2; i++) {
+    const t = i / (coils * 2)
+    const off = i % 2 ? 9 : -9
+    ctx.lineTo(ax + dx * t + nx / m * off, ay + dy * t + ny / m * off)
+  }
+  ctx.lineTo(b.body.position.x, b.body.position.y); ctx.stroke(); ctx.lineWidth = 1 * LW
+}
+
+// 定滑轮：两物体到滑轮的距离之和受绳长约束
+// ——— 电路元件绘制 ———
+function drawCircuit(ctx, c, all) {
+  const p = c.props, len = p.len ?? 90
+  const ang = ((p.angle ?? 0) * Math.PI) / 180
+  const res = solve(all)
+  const I = res?.currents.get(c.id) ?? 0
+  const dead = res && c.type !== 'battery' && c.type !== 'switch' && Math.abs(I) < 1e-6
+  ctx.save()
+  ctx.globalAlpha = dead ? 0.4 : 1
+  ctx.translate(c.x, c.y); ctx.rotate(ang)
+  const L = len / 2, g = 16  // 引脚到图形
+  ctx.strokeStyle = '#c9d1d9'; ctx.lineWidth = 2 * LW; ctx.lineCap = 'round'
+
+  const line = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke() }
+  // 引脚
+  line(-L, 0, -g, 0); line(g, 0, L, 0)
+  ctx.fillStyle = '#8b949e'
+  for (const sx of [-L, L]) { ctx.beginPath(); ctx.arc(sx, 0, 3, 0, 7); ctx.fill() }
+
+  switch (c.type) {
+    case 'battery': {
+      // 长线为正极（+x 方向）
+      line(-6, -10, -6, 10); line(6, -18, 6, 18)
+      ctx.strokeStyle = '#ffd166'
+      line(-g, 0, -6, 0); line(6, 0, g, 0)
+      ctx.fillStyle = '#ffd166'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'
+      ctx.fillText('+', 12, -12)
+      break
+    }
+    case 'resistor':
+    case 'rheostat': {
+      ctx.strokeStyle = '#dbe6f5'
+      ctx.strokeRect(-14, -8, 28, 16)
+      if (c.type === 'rheostat') { line(-14, 12, 14, -14); ctx.beginPath(); ctx.moveTo(14, -14); ctx.lineTo(9, -10); ctx.lineTo(15, -8); ctx.closePath(); ctx.fillStyle = '#dbe6f5'; ctx.fill() }
+      break
+    }
+    case 'bulb': {
+      const on = Math.abs(I) > 0.02
+      ctx.strokeStyle = '#dbe6f5'
+      ctx.beginPath(); ctx.arc(0, 0, 11, 0, 7); ctx.stroke()
+      line(-8, -8, 8, 8); line(-8, 8, 8, -8)
+      if (on) { ctx.fillStyle = 'rgba(255,214,102,.18)'; ctx.beginPath(); ctx.arc(0, 0, 16, 0, 7); ctx.fill() }
+      break
+    }
+    case 'switch': {
+      ctx.strokeStyle = '#dbe6f5'
+      ctx.beginPath(); ctx.arc(-g + 2, 0, 3, 0, 7); ctx.arc(g - 2, 0, 3, 0, 7); ctx.stroke()
+      if (p.closed) line(-g + 2, 0, g - 2, 0)
+      else line(-g + 2, 0, g - 2, -12)
+      break
+    }
+    case 'ammeter':
+    case 'voltmeter': {
+      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * LW
+      ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke()
+      ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(c.type === 'ammeter' ? 'A' : 'V', 0, 1)
+      break
+    }
+    default: break
+  }
+  ctx.restore()
+
+  // 电流方向箭头（沿元件轴线，正方向 a→b）
+  if (Math.abs(I) > 1e-3) {
+    const dir = Math.sign(I)
+    const ax = Math.cos(ang), ay = Math.sin(ang)
+    const bx = c.x - ax * (len / 2 - 10), by = c.y - ay * (len / 2 - 10)
+    const tip = { x: bx + ax * 10 * dir, y: by + ay * 10 * dir }
+    ctx.strokeStyle = '#5ad1a5'; ctx.fillStyle = '#5ad1a5'; ctx.lineWidth = 2 * LW
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tip.x, tip.y); ctx.stroke()
+    const a2 = Math.atan2(ay * dir, ax * dir)
+    ctx.beginPath(); ctx.moveTo(tip.x, tip.y)
+    ctx.lineTo(tip.x - 7 * Math.cos(a2 - 0.45), tip.y - 7 * Math.sin(a2 - 0.45))
+    ctx.lineTo(tip.x - 7 * Math.cos(a2 + 0.45), tip.y - 7 * Math.sin(a2 + 0.45))
+    ctx.fill(); ctx.lineWidth = 1 * LW
+  }
+
+  // 数值标注
+  const nx = -Math.sin(ang), ny = Math.cos(ang)
+  const lx = c.x + nx * 24, ly = c.y + ny * 24
+  ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+  let label = ''
+  if (c.type === 'battery') label = `E=${p.E}V r=${p.r}Ω`
+  else if (c.type === 'resistor' || c.type === 'rheostat' || c.type === 'bulb') label = `R=${p.R}Ω`
+  else if (c.type === 'switch') label = p.closed ? '闭合' : '断开'
+  if (c.type === 'ammeter') label = `I=${Math.abs(I).toFixed(3)}A`
+  if (c.type === 'resistor' || c.type === 'rheostat' || c.type === 'bulb') label += `  P=${(res?.power.get(c.id) ?? 0).toFixed(2)}W`
+  if (c.type === 'voltmeter') {
+    const u = res ? Math.abs(uAcross(res, c, all)) : 0
+    label = `U=${u.toFixed(2)}V`
+  }
+  if (label) {
+    const w = ctx.measureText(label).width
+    ctx.fillStyle = 'rgba(20,24,32,.7)'
+    ctx.fillRect(lx - w / 2 - 3, ly - 7, w + 6, 14)
+    ctx.fillStyle = '#9fb3c8'
+    ctx.fillText(label, lx, ly)
+  }
+}
+
+function uAcross(res, c, all) {
+  const p = c.props, len = p.len ?? 90
+  const ang = ((p.angle ?? 0) * Math.PI) / 180
+  const dx = (Math.cos(ang) * len) / 2, dy = (Math.sin(ang) * len) / 2
+  // 用电表两端端子所在节点求电压差（solve 已聚过类，这里用端子坐标重新映射）
+  void all
+  const va = res.V[res.nodeOf.get(c.id)?.a ?? 0] ?? 0
+  const vb = res.V[res.nodeOf.get(c.id)?.b ?? 0] ?? 0
+  return va - vb
+  void dx; void dy
+}

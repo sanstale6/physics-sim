@@ -1,0 +1,126 @@
+import Matter from 'matter-js'
+import { registry } from './registry.js'
+import { frictionForce } from './contacts.js'
+
+// —— 单位约定 ——
+// 100 px = 1 m；质量用 kg；力用 N；Matter 每步 16.67 ms
+export const SCALE = 100
+export const G = 9.8
+export const FORCE_SCALE = 1e-4   // N → matter 力（配合 mass=kg、step=16.67ms，a=F/m 精确成立）
+export const VEL_SCALE = 0.6      // matter 速度 px/step → m/s
+
+// matter 的重力：force = mass · gravity.y · gravity.scale，每个 body 都吃，没有 gravityScale 开关
+export const GRAV = { y: G / 10, scale: 0.001 }
+// 重力开关（失重演示用）；关掉时带电体也不必再抵消重力
+export const gravityState = { on: true }
+
+export function createWorld() {
+  const e = Matter.Engine.create()
+  e.gravity.y = GRAV.y            // 0.98 × scale 0.001 → a = 9.8 px 换算法下正好 9.8 m/s²
+  e.gravity.scale = GRAV.scale
+  e.enableSleeping = false
+  e.positionIterations = 8
+  e.velocityIterations = 6
+  return e
+}
+
+import { enforceConstraints } from './constraints.js'
+
+export function applyForces(components) {
+  // 弹簧/绳/滑轮等元件的约束力
+  for (const c of components) {
+    if (registry[c.type]?.force) registry[c.type].force(c, components)
+  }
+  const forces = components.filter(c => c.type === 'constantForce')
+  const charges = components.filter(c => c.type === 'charge' && c.body)
+  const fields = components.filter(c => c.type === 'uniformB' || c.type === 'uniformE')
+
+  // 恒力：作用在最近的物块/小球上（超出 260px 视为未连接）
+  for (const f of forces) {
+    const t = nearestTarget(f, components)
+    f._target = t ? t.id : null
+    if (t) Matter.Body.applyForce(t.body, t.body.position, { x: f.props.fx * FORCE_SCALE, y: -f.props.fy * FORCE_SCALE })
+  }
+
+  // 库仑力：F = k q1 q2 / r²（q 用 μC，r 用 m）
+  // 教学单位：电荷量 q 无物理单位（面板里写 μC 只是符号），库仑常量取 1，
+  // 使 q=1 相距 1m 时约 1N —— 真实 9e9 会让 1μC 的力大到看不到运动
+  const K = 1, uC = 1
+  for (let i = 0; i < charges.length; i++)
+    for (let j = i + 1; j < charges.length; j++) {
+      const a = charges[i].body, b = charges[j].body
+      const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y
+      const rPx = Math.max(Math.hypot(dx, dy), 20)
+      const r = rPx / SCALE
+      const F = K * charges[i].props.q * uC * charges[j].props.q * uC / (r * r) // N
+      const Fm = F * FORCE_SCALE
+      const ux = dx / rPx, uy = dy / rPx
+      Matter.Body.applyForce(a, a.position, { x: -Fm * ux, y: Fm * uy })
+      Matter.Body.applyForce(b, b.position, { x: Fm * ux, y: -Fm * uy })
+    }
+
+  // 场区域内的电荷
+  // 磁场：洛伦兹力只改变速度方向。若用「每步加力」的半隐式欧拉，
+  // 圆运动会一步步变大（能量漂移），所以直接按 ω = qB/m 精确旋转速度矢量。
+  // 电场：F = qE，仍按力施加。
+  const inside = (body, f) =>
+    Math.abs(body.position.x - f.x) <= f.props.w / 2 && Math.abs(body.position.y - f.y) <= f.props.h / 2
+
+  for (const c of charges) {
+    const body = c.body
+    const m = body.mass || 1
+    let vx = body.velocity.x * VEL_SCALE    // m/s，屏幕 x
+    let vy = body.velocity.y * VEL_SCALE    // m/s，屏幕 y（向下为正）
+    let rotated = false
+    for (const f of fields) {
+      if (f.type !== 'uniformB' || !inside(body, f)) continue
+      const w = (c.props.q * f.props.bz) / m            // rad/s
+      const phi = w / 60                                // 每步 1/60 s
+      const cs = Math.cos(phi), sn = Math.sin(phi)
+      const nx = vx * cs - vy * sn
+      const ny = vx * sn + vy * cs
+      vx = nx; vy = ny; rotated = true
+    }
+    if (rotated) {
+      Matter.Body.setVelocity(body, { x: vx / VEL_SCALE, y: vy / VEL_SCALE })
+    }
+    // 带电粒子不计重力：matter 的重力对所有 body 生效，这里反向抵消
+    const gw = gravityState.on ? body.mass * GRAV.y * GRAV.scale : 0
+    if (gw) Matter.Body.applyForce(body, body.position, { x: 0, y: -gw })
+    for (const f of fields) {
+      if (f.type !== 'uniformE' || !inside(body, f)) continue
+      const p = f.props
+      const q = c.props.q * uC
+      // F = qE，物理 y 向上 → 屏幕 y 取反
+      Matter.Body.applyForce(body, body.position, {
+        x: q * p.ex * FORCE_SCALE,
+        y: -q * p.ey * FORCE_SCALE,
+      })
+    }
+  }
+
+  // 自定义摩擦放在最后：此时 body.force 已包含本步重力之外的各外力，
+  // 便于判断静摩擦是否足以顶住（μN 不足则转为滑动）。
+  for (const c of components) {
+    if (c.body && !c.body.isStatic && (c.type === 'block' || c.type === 'ball')) {
+      const f = frictionForce(c, components)
+      if (f && (f.x || f.y)) Matter.Body.applyForce(c.body, c.body.position, { x: f.x * FORCE_SCALE, y: f.y * FORCE_SCALE })
+    }
+  }
+
+}
+
+export function nearestTarget(f, components) {
+  let best = null, bestDist = 260
+  for (const c of components) {
+    if (!c.body || c.body.isStatic || !['block', 'ball', 'particle', 'charge'].includes(c.type)) continue
+    const d = Math.hypot(c.body.position.x - f.x, c.body.position.y - f.y)
+    if (d < bestDist) { bestDist = d; best = c }
+  }
+  return best
+}
+
+// 每步 Matter.Engine.update 之后调用：轻绳/滑轮等硬约束的位置投影
+export function postStep(components) {
+  enforceConstraints(components)
+}
