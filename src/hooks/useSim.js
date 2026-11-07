@@ -161,6 +161,25 @@ export function useSim() {
     const now = Date.now()
     if (now - lastPropRef.current > 800) { pushHistory(); lastPropRef.current = now }
     o.props[key] = value
+    // 线段元件调长度：若某端已吸附到其他端子，则保持该端不动，沿另一端伸长
+    if (key === 'len' && CIRCUIT_TYPES.includes(o.type)) {
+      const a = ((o.props.angle ?? 0) * Math.PI) / 180
+      const ux = Math.cos(a), uy = Math.sin(a)
+      const others = objsRef.current.filter(t => t.id !== o.id)
+      const attached = [-1, 1].map(sg => {
+        const ex = o.x + sg * ux * (o.props.len ?? 90) / 2, ey = o.y + sg * uy * (o.props.len ?? 90) / 2
+        return !!snapToPin(ex, ey, others, 8)
+      })
+      if (attached[0] !== attached[1]) {   // 恰有一端依附
+        const sg = attached[0] ? -1 : 1    // 固定端符号；自由端 = -sg
+        // 新中点：固定端位置不变，自由端沿原方向伸长 value
+        const fx = o.x - sg * ux * (o.props.len ?? 90) / 2, fy = o.y - sg * uy * (o.props.len ?? 90) / 2 // 固定端坐标
+        o.x = fx + sg * ux * value / 2
+        o.y = fy + sg * uy * value / 2
+        if (o.home) { o.home.x = o.x; o.home.y = o.y }
+      }
+      // 两端都依附或都自由 → 正常居中伸长，不做特殊处理
+    }
     if (key === 'angle') {
       o.props.angle = value
       if (o.home) o.home.angle = (value * Math.PI) / 180
