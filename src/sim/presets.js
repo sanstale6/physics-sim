@@ -202,4 +202,26 @@ Object.assign(presets, {
     { type: 'ball', x: 400, y: 200, props: { m: 0.5, r: 12, q: 0, v0x: 9, v0y: 0 } },
     { type: 'uniformB', x: 400, y: 330, props: { w: 520, h: 460, bz: 1.5 } },
   ],
+  速度选择器: [
+    { type: 'charge', x: 180, y: 300, props: { q: 1, m: 0.5, r: 10, v0x: 10, v0y: 0 } },
+    { type: 'uniformE', x: 400, y: 300, props: { w: 440, h: 300, ex: 0, ey: 200 } },
+    { type: 'uniformB', x: 400, y: 300, props: { w: 440, h: 300, bz: 2 } },
+  ],
+  质谱仪: [
+    { type: 'charge', x: 160, y: 380, props: { q: 1, m: 1, r: 10, v0x: 10, v0y: 0 } },
+    { type: 'uniformE', x: 340, y: 380, props: { w: 260, h: 220, ex: 0, ey: 200 } },
+    { type: 'uniformB', x: 340, y: 380, props: { w: 260, h: 220, bz: 2 } },
+    { type: 'uniformB', x: 660, y: 380, props: { w: 320, h: 360, bz: -1 } },
+  ],
+  电子枪偏转: [
+    { type: 'electronGun', x: 140, y: 300, props: { q: -1, m: 0.5, v: 6, rate: 1.2, angle: 0 } },
+    { type: 'plates', x: 480, y: 300, props: { len: 300, gap: 140, U: 120, angle: 90 } },
+    { type: 'uniformB', x: 820, y: 300, props: { w: 240, h: 400, bz: -1.5 } },
+  ],
+  磁流体发电机: [
+    { type: 'plates', x: 400, y: 300, props: { len: 320, gap: 160, U: 0, angle: 0 } },
+    { type: 'uniformB', x: 400, y: 300, props: { w: 380, h: 280, bz: 2 } },
+    { type: 'charge', x: 220, y: 300, props: { q: 1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
+    { type: 'charge', x: 220, y: 340, props: { q: -1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
+  ],
 })

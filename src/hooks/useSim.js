@@ -313,9 +313,12 @@ export function useSim() {
 
   const setRunning = useCallback((v) => { runningRef.current = v; setRunningState(v) }, [])
 
+  const spawnRef = useRef(null)
+  useEffect(() => { spawnRef.current = spawn }, [spawn])
+
   useEffect(() => {
     ensureWorld()
-    let raf, last = performance.now(), acc = 0, lastPub = 0
+    let raf, last = performance.now(), acc = 0, lastPub = 0, gunAcc = 0
     const loop = (now) => {
       const dt = Math.min(0.1, (now - last) / 1000)
       last = now
@@ -334,6 +337,22 @@ export function useSim() {
           timeRef.current += (n * STEP_MS) / 1000
           // 面板 10Hz 刷新即可，避免每帧重渲染整个 React 树（手机上会卡点击）
           if (now - lastPub > 120) { lastPub = now; setTime(timeRef.current); bump() }
+        }
+        // 电子枪：按 rate 周期发射粒子（沿枪口方向，速度 v）
+        gunAcc += n * STEP_MS / 1000
+        const sp = spawnRef.current
+        if (sp) for (const g of objsRef.current) {
+          if (g.type !== 'electronGun') continue
+          const rate = g.props.rate ?? 2
+          g._t = (g._t ?? rate) + gunAcc
+          if (g._t >= rate) {
+            g._t -= rate
+            const a = ((g.props.angle ?? 0) * Math.PI) / 180
+            const px = g.x + Math.cos(a) * 26, py = g.y + Math.sin(a) * 26
+            const vpx = Math.cos(a) * (g.props.v ?? 5) / VEL_SCALE, vpy = Math.sin(a) * (g.props.v ?? 5) / VEL_SCALE
+            const born = sp('charge', px, py, { q: g.props.q ?? -1, m: g.props.m ?? 0.5, r: 8, v0x: 0, v0y: 0 })
+            if (born?.body) { Matter.Body.setVelocity(born.body, { x: vpx, y: vpy }) }
+          }
         }
       }
       raf = requestAnimationFrame(loop)

@@ -1,10 +1,17 @@
 // 直流电路：端子-节点 + 节点电压法（Norton 等效，无理想电压源奇异问题）
 // 约定：端子 a 为 −，b 为 +（电池），电流正方向 a→b
 export const CIRCUIT_TYPES = [
-  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid']
+  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates']
 
 export function pins(o) {
   if (o.type === 'junction') return [{ x: o.x, y: o.y }, { x: o.x, y: o.y }]   // 接点：两端重合于圆心
+  if (o.type === 'plates') {
+    // 极板端子 = 两板各自中点（沿法线方向）
+    const gap = o.props.gap ?? 100
+    const ag = ((o.props.angle ?? 0) * Math.PI) / 180
+    const nx = -Math.sin(ag) * gap / 2, ny = Math.cos(ag) * gap / 2
+    return [{ x: o.x - nx, y: o.y - ny }, { x: o.x + nx, y: o.y + ny }]
+  }
   const len = o.props.len ?? 90
   const a = ((o.props.angle ?? 0) * Math.PI) / 180
   const dx = (Math.cos(a) * len) / 2, dy = (Math.sin(a) * len) / 2
@@ -30,6 +37,7 @@ export function resistance(o) {
     case 'rheostat': return Math.max(0.01, p.R ?? 10)
     case 'resistor': return Math.max(0.01, p.R ?? 10)
     case 'bulb': return Math.max(0.5, p.R ?? 10)
+    case 'plates': return 0.5   // 极板间等离子体内阻
     default: return null
   }
 }
@@ -164,11 +172,11 @@ export function solve(objs) {
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
     if (a === nb) continue
-    if (e.type === 'battery') {
-      const r = Math.max(0.01, e.props.r ?? 0.5)
+    if (e.type === 'battery' || e.type === 'plates') {
+      const r = e.type === 'plates' ? 0.5 : Math.max(0.01, e.props.r ?? 0.5)
       const g = 1 / r
       G[a][a] += g; G[nb][nb] += g; G[a][nb] -= g; G[nb][a] -= g
-      const E = e.props.E ?? 3
+      const E = e.type === 'plates' ? (e.props.U ?? 0) : (e.props.E ?? 3)
       I[nb] += E * g; I[a] -= E * g
     } else {
       const g = 1 / resistance(e)
@@ -200,7 +208,11 @@ export function solve(objs) {
   const currents = new Map()
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
-    if (e.type === 'battery') currents.set(e.id, (V[a] - V[nb] + (e.props.E ?? 3)) / Math.max(0.01, e.props.r ?? 0.5))
+    if (e.type === 'battery' || e.type === 'plates') {
+      const r0 = e.type === 'plates' ? 0.5 : Math.max(0.01, e.props.r ?? 0.5)
+      const E0 = e.type === 'plates' ? (e.props.U ?? 0) : (e.props.E ?? 3)
+      currents.set(e.id, (V[a] - V[nb] + E0) / r0)
+    }
     else currents.set(e.id, (V[a] - V[nb]) / resistance(e))
   }
   // 功率与状态判断

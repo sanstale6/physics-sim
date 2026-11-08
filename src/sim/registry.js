@@ -722,6 +722,82 @@ export const registry = {
       ctx.restore(); ctx.lineWidth = 1 * LW
     },
   },
+  electronGun: {
+    name: '电子枪',
+    defaults: () => ({ q: -1, m: 0.5, v: 5, rate: 2, angle: 0 }),
+    fields: [
+      { key: 'q', label: '发射电荷 q', unit: 'μC', min: -20, max: 20, step: 0.5 },
+      { key: 'm', label: '粒子质量 m', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
+      { key: 'v', label: '射出速度 v', unit: 'm/s', min: 0.5, max: 30, step: 0.5 },
+      { key: 'rate', label: '发射间隔', unit: 's', min: 0.2, max: 5, step: 0.2 },
+      { key: 'angle', label: '发射方向', unit: '°', min: 0, max: 360, step: 5 },
+    ],
+    body: null,   // 运行时由 useSim 每 rate 秒发射一个粒子
+    overlay: (ctx, c) => {
+      const p = c.props
+      const a = ((p.angle ?? 0) * Math.PI) / 180
+      const ux = Math.cos(a), uy = Math.sin(a)
+      ctx.save()
+      ctx.translate(c.x, c.y); ctx.rotate(a)
+      ctx.strokeStyle = '#f5b342'; ctx.lineWidth = 2 * LW; ctx.fillStyle = 'rgba(245,179,66,.15)'
+      ctx.strokeRect(-22, -9, 30, 18); ctx.fillRect(-22, -9, 30, 18)
+      ctx.beginPath(); ctx.moveTo(8, -9); ctx.lineTo(20, -4); ctx.lineTo(20, 4); ctx.lineTo(8, 9); ctx.closePath()
+      ctx.stroke(); ctx.fill()
+      ctx.restore()
+      ctx.beginPath(); ctx.moveTo(c.x + ux * 30, c.y + uy * 30); ctx.lineTo(c.x + ux * 58, c.y + uy * 58)
+      ctx.strokeStyle = '#f5b342'; ctx.lineWidth = 2 * LW; ctx.stroke()
+      const tip = 9, bx = c.x + ux * 58, by = c.y + uy * 58
+      ctx.beginPath(); ctx.moveTo(bx + ux * tip - uy * tip * 0.5, by + uy * tip + ux * tip * 0.5)
+      ctx.lineTo(bx, by)
+      ctx.lineTo(bx + ux * tip + uy * tip * 0.5, by + uy * tip - ux * tip * 0.5)
+      ctx.stroke()
+      ctx.fillStyle = '#f5b342'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'
+      ctx.fillText('电子枪 v=' + (p.v ?? 5).toFixed(1) + 'm/s', c.x - uy * 24, c.y + ux * 24 + 4)
+    },
+  },
+  plates: {
+    name: '平行极板',
+    defaults: () => ({ len: 200, gap: 100, U: 100, angle: 0 }),
+    fields: [
+      { key: 'len', label: '板长 L', unit: 'px', min: 60, max: 800, step: 10 },
+      { key: 'gap', label: '板间距 d', unit: 'px', min: 40, max: 400, step: 5 },
+      { key: 'U', label: '电压 U', unit: 'V', min: -2000, max: 2000, step: 10 },
+      { key: 'angle', label: '旋转', unit: '°', min: 0, max: 360, step: 5 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const p = c.props
+      const a = ((p.angle ?? 0) * Math.PI) / 180
+      const ux = Math.cos(a), uy = Math.sin(a)
+      const nx = -uy, ny = ux
+      const hl = (p.len ?? 200) / 2, hg = (p.gap ?? 100) / 2
+      const p1 = { x: c.x + nx * hg, y: c.y + ny * hg }
+      const p2 = { x: c.x - nx * hg, y: c.y - ny * hg }
+      ctx.save()
+      ctx.lineWidth = 4 * LW; ctx.lineCap = 'butt'
+      for (const [pl, ch, col] of [[p1, '+', '#38bdf8'], [p2, '−', '#f87171']]) {
+        ctx.strokeStyle = col
+        ctx.beginPath(); ctx.moveTo(pl.x - ux * hl, pl.y - uy * hl); ctx.lineTo(pl.x + ux * hl, pl.y + uy * hl); ctx.stroke()
+        ctx.font = '13px system-ui'; ctx.fillStyle = col; ctx.textAlign = 'center'
+        for (let s = -hl + 20; s <= hl - 20; s += 40) ctx.fillText(ch, pl.x + ux * s + nx * 11, pl.y + uy * s + ny * 11 + 4)
+      }
+      const sgn = Math.sign(p.U ?? 0)
+      if (sgn) {
+        const dx = -nx * sgn, dy = -ny * sgn
+        ctx.strokeStyle = 'rgba(56,189,248,.7)'; ctx.lineWidth = 1.5 * LW
+        for (let s = -hl + 24; s < hl - 10; s += 48) {
+          const bx = c.x + ux * s, by = c.y + uy * s
+          ctx.beginPath(); ctx.moveTo(bx - dx * 12, by - dy * 12); ctx.lineTo(bx + dx * 12, by + dy * 12)
+          ctx.moveTo(bx + dx * 12, by + dy * 12); ctx.lineTo(bx + dx * 6 - dy * 4, by + dy * 6 + dx * 4)
+          ctx.moveTo(bx + dx * 12, by + dy * 12); ctx.lineTo(bx + dx * 6 + dy * 4, by + dy * 6 - dx * 4)
+          ctx.stroke()
+        }
+      }
+      ctx.fillStyle = '#dbe6f5'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'
+      ctx.fillText('U = ' + (p.U ?? 0) + 'V  d = ' + ((p.gap ?? 100) / 100).toFixed(2) + 'm', c.x - uy * (hg + 26), c.y + ux * (hg + 26))
+      ctx.restore()
+    },
+  },
   uniformE: {
     name: '匀强电场 E',
     defaults: () => ({ w: 220, h: 160, ex: 0, ey: 100 }),  // N/C，ey>0 指上（物理坐标）

@@ -122,6 +122,26 @@ export function applyForces(components) {
         y: -q * p.ey * FORCE_SCALE,
       })
     }
+    // 平行极板：板间匀强电场 E = U/d（d 单位换算 m）
+    for (const f of components) {
+      if (f.type !== 'plates') continue
+      const p = f.props
+      const qq = c.props.q * uC
+      const a = ((p.angle ?? 0) * Math.PI) / 180
+      const nx = -Math.sin(a), ny = Math.cos(a)   // 板法线（屏幕坐标）
+      // 粒子相对板中心，沿轴/法线分解，判定在板间区域
+      const dx = body.position.x - f.x, dy = body.position.y - f.y
+      const sAlong = dx * Math.cos(a) + dy * Math.sin(a)
+      const sN = dx * nx + dy * ny
+      const halfL = (p.len ?? 200) / 2, halfG = (p.gap ?? 100) / 2
+      if (Math.abs(sAlong) > halfL || Math.abs(sN) > halfG) continue
+      const E = (p.U ?? 0) / ((p.gap ?? 100) / SCALE)   // N/C
+      // U>0 → 法线正侧板为正 → 场指向负板（−n）
+      Matter.Body.applyForce(body, body.position, {
+        x: -qq * E * nx * FORCE_SCALE,
+        y: qq * E * ny * FORCE_SCALE,
+      })
+    }
   }  // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
   for (const mg of components) {
     if (mg.type !== 'magnet') continue
