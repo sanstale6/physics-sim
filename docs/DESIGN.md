@@ -176,3 +176,19 @@ Inspector 据此生成滑条/数字框，避免硬编码。
 
 ### 15.4 纯导线样式
 `wire` 不再画「两段引脚 + 中间 32px 缺口」，改为整条实线连通。
+
+## 16. 电磁感应与电路扩展（第 16 轮）
+
+### 16.1 金属棒 metalRod（替代 rail）
+- 动态刚体（rotRect + `inertia: Infinity`，防安培力矩转动），端子取 `body.position/angle` 而非 props（棒会滑动）
+- 电动势：ε = B·L(vx sinθ − vy cosθ)，B 为棒处 uniformB 之和（内部约定 B_eff=(0,0,−bz)，与电荷洛伦兹力同号，楞次定律自动成立）
+- 安培力：Fx = −I·L·B·sinθ、Fy = I·L·B·cosθ → 阻碍相对运动
+- 滑动接触：clusterNodes 里「端子压在线段中段」规则**仅对 metalRod** 生效，避免其它元件端子把电路短接
+- 注意：applyForces 每步只能调用一次（body.force 累加）
+
+### 16.2 二极管 / 多用电表
+- diode：正向 1e-2Ω、反向 1e12Ω，用 `_on === false` 表示截止；solve 末尾做一次方向迭代（重解后清临时标记保缓存）
+- multimeter：档位 mode 0=A(0.1Ω)/1=V(1e6Ω)/2=Ω(1e12Ω)，Ω 档靠端子重合找被测电阻标称值
+
+### 16.3 交流电源
+- battery props `ac/freq`；useSim 每物理步写 `_eInst = E·sin(2πft)`，切回直流时删除 `_eInst`；solve 缓存 key 含 `_eInst`，面板/灯泡随相位闪烁

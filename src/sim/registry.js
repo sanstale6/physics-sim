@@ -224,35 +224,52 @@ export const registry = {
       ctx.restore()
     },
   },
-  rail: {
-    name: '金属导轨',
-    defaults: () => ({ len: 360, gap: 120, angle: 0 }),
+  metalRod: {
+    name: '金属棒',
+    defaults: () => ({ len: 200, R: 2, m: 0.5, angle: 90, v0x: 0, v0y: 0, g: 0 }),
     fields: [
-      { key: 'len', label: '长度', unit: 'px', min: 120, max: 1200, step: 10 },
-      { key: 'gap', label: '轨距', unit: 'px', min: 40, max: 400, step: 5 },
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 600, step: 10 },
+      { key: 'R', label: '电阻', unit: 'Ω', min: 0.1, max: 50, step: 0.1 },
+      { key: 'm', label: '质量', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
       { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+      { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
+      { key: 'g', label: '受重力（0=导轨上架空 1=受重力）', min: 0, max: 1, step: 1 },
     ],
-    // 两根静态杆：gap 上沿一根、下沿一根（中间空，供导体棒滑动）
-    body: (x, y, p) => ({ type: 'compound', parts: [
-      { x: 0, y: -(p.gap ?? 120) / 2, w: p.len ?? 360, h: 12 },
-      { x: 0, y: (p.gap ?? 120) / 2, w: p.len ?? 360, h: 12 },
-    ], options: { isStatic: true, friction: 0 }, label: 'rail' }),
-    overlay: (ctx, c) => {
-      const { len, gap } = c.props
-      const x = c.x, y = c.y, a = ((c.props.angle ?? 0) * Math.PI) / 180
+    // 可运动导体：动态刚体（惯性取无穷，避免切割磁感线时被安培力矩转起来）
+    body: (x, y, p) => ({ type: 'rotRect', w: p.len ?? 200, h: 12, angle: ((p.angle ?? 90) * Math.PI) / 180,
+      options: { density: 0.001, friction: 0, frictionAir: 0, restitution: 0, inertia: Infinity }, label: 'metalRod' }),
+    overlay: (ctx, c, all) => {
+      const b = c.body
+      const x = b ? b.position.x : c.x, y = b ? b.position.y : c.y
+      const th = b ? b.angle : ((c.props.angle ?? 90) * Math.PI) / 180
+      const len = c.props.len ?? 200
       ctx.save()
-      ctx.translate(x, y); ctx.rotate(a)
-      ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 2.2 * LW
-      ctx.beginPath()
-      ctx.moveTo(-len / 2, -gap / 2); ctx.lineTo(len / 2, -gap / 2)
-      ctx.moveTo(-len / 2, gap / 2); ctx.lineTo(len / 2, gap / 2); ctx.stroke()
-      // 导电斜纹
-      ctx.lineWidth = 1 * LW; ctx.strokeStyle = 'rgba(250,204,21,.45)'
-      for (let i = -len / 2 + 12; i < len / 2 - 4; i += 22) {
-        ctx.beginPath(); ctx.moveTo(i, -gap / 2 - 5); ctx.lineTo(i + 8, -gap / 2 + 5)
-        ctx.moveTo(i, gap / 2 - 5); ctx.lineTo(i + 8, gap / 2 + 5); ctx.stroke()
+      ctx.translate(x, y); ctx.rotate(th)
+      // 铜棒本体
+      const grd = ctx.createLinearGradient(0, -6, 0, 6)
+      grd.addColorStop(0, '#fcd34d'); grd.addColorStop(0.5, '#b45309'); grd.addColorStop(1, '#fbbf24')
+      ctx.fillStyle = grd
+      ctx.fillRect(-len / 2, -6, len, 12)
+      ctx.strokeStyle = 'rgba(251,191,36,.95)'; ctx.lineWidth = 1.2 * LW
+      ctx.strokeRect(-len / 2, -6, len, 12)
+      ctx.restore()
+      // 感应电动势 / 电流标注
+      const res = solve(all)
+      const I = res?.currents?.get(c.id) ?? 0
+      const eps = c.props._eInst ?? 0
+      if (Math.abs(eps) > 1e-3) {
+        ctx.save()
+        ctx.font = `${10 * LW}px system-ui, sans-serif`
+        ctx.textAlign = 'center'
+        ctx.fillStyle = 'rgba(147,197,253,.95)'
+        ctx.fillText(`ε=${eps.toFixed(2)}V`, x, y - 16 * LW)
+        if (Math.abs(I) > 1e-4) {
+          ctx.fillStyle = 'rgba(248,113,113,.95)'
+          ctx.fillText(`I=${Math.abs(I).toFixed(2)}A`, x, y + 24 * LW)
+        }
+        ctx.restore()
       }
-      ctx.restore(); ctx.lineWidth = 1 * LW
+      ctx.lineWidth = 1 * LW
     },
   },
   conveyor: {

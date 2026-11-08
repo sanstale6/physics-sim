@@ -28,12 +28,16 @@ for (const [k, reg] of Object.entries(registry)) {
   ok('构造 ' + k, !!body && !err, err ?? '')
 }
 
-// 导轨必须是两根杆、且中间留空
+// 金属棒：可运动导体，角度来自 props.angle，惯性取无穷（不被安培力矩转起来）
 {
-  const def = registry.rail.body(500, 300, { len: 400, gap: 120 })
-  ok('导轨两根杆', def.type === 'compound' && def.parts.length === 2)
-  const b = Matter.Body.create({ parts: def.parts.map(pt => Matter.Bodies.rectangle(500 + pt.x, 300 + pt.y, pt.w, pt.h)), isStatic: true })
-  ok('导轨中间留空', b.bounds.min.y < 300 - 40 && b.bounds.max.y > 300 + 40, `y ${b.bounds.min.y.toFixed(0)}..${b.bounds.max.y.toFixed(0)}`)
+  const def = registry.metalRod.body(500, 300, { len: 240, angle: 90 })
+  ok('金属棒 rotRect', def.type === 'rotRect')
+  ok('金属棒竖直（angle=props.angle）', Math.abs(def.angle - Math.PI / 2) < 1e-6)
+  const b = Matter.Bodies.rectangle(500, 300, def.w, def.h, def.options)
+  Matter.Body.setAngle(b, def.angle)
+  ok('金属棒不旋转', b.inertia === Infinity, 'inertia ' + b.inertia)
+  ok('金属棒长度 240', Math.abs(b.bounds.max.y - b.bounds.min.y - 240) < 20,
+    `h ${(b.bounds.max.y - b.bounds.min.y).toFixed(0)}`)
 }
 
 console.log(`\n${pass} 通过, ${fail} 失败`)

@@ -99,26 +99,28 @@ if (rheo) {
   console.log('errors after select:', errors.length)
   for (const e of errors.slice(0, 4)) console.log('---', e.split('\n').slice(0, 6).join('\n'))
 }
-// —— 复现：放置金属导轨 ——
-const railBtn = palBtns.find(b => b.textContent.includes('金属导轨'))
-console.log('rail button:', !!railBtn)
+// —— 复现：放置金属棒 ——
+const railBtn = palBtns.find(b => b.textContent.includes('金属棒'))
+console.log('metalRod button:', !!railBtn)
 if (railBtn) {
   railBtn.dispatchEvent(new win.MouseEvent('pointerdown', { bubbles: true }))
   await sleep(80)
   pe('pointerdown', 400, 330)
   pe('pointerup', 400, 330)
   await sleep(250)
-  console.log('errors after rail place:', errors.length)
-  for (const e of errors.slice(0, 3)) console.log('---RAIL---', e.split('\n').slice(0, 6).join('\n'))
+  console.log('errors after rod place:', errors.length)
+  for (const e of errors.slice(0, 3)) console.log('---ROD---', e.split('\n').slice(0, 6).join('\n'))
 }
 // 触屏路径复测
-const railBtn2 = palBtns.find(b => b.textContent.includes('金属导轨'))
-railBtn2.dispatchEvent(new win.MouseEvent('pointerdown', { bubbles: true, pointerType: 'touch' }))
-await sleep(80)
-pe('pointerdown', 500, 380)
-pe('pointerup', 500, 380)
-await sleep(250)
-console.log('errors after touch rail place:', errors.length)
+const railBtn2 = palBtns.find(b => b.textContent.includes('金属棒'))
+if (railBtn2) {
+  railBtn2.dispatchEvent(new win.MouseEvent('pointerdown', { bubbles: true, pointerType: 'touch' }))
+  await sleep(80)
+  pe('pointerdown', 500, 380)
+  pe('pointerup', 500, 380)
+  await sleep(250)
+  console.log('errors after touch rod place:', errors.length)
+}
 const sb = doc.querySelector('.statusbar')
 console.log('statusbar:', sb ? sb.textContent.slice(0, 60) : 'N/A')
 process.exit(0)

@@ -163,10 +163,15 @@ Object.assign(presets, {
     { type: 'ball', x: 460, y: 380, props: { m: 1, r: 12, q: 5, mu: 0 } },
     { type: 'uniformE', x: 400, y: 400, props: { w: 400, h: 260, ex: 300, ey: 0 } },
   ],
-  金属导轨上滑杆: [
-    { type: 'rail', x: 400, y: 330, props: { len: 420, gap: 120 } },
-    { type: 'block', x: 400, y: 330, props: { m: 0.5, mu: 0, q: 30, v0x: 3, v0y: 0 } },
-    { type: 'uniformB', x: 400, y: 330, props: { w: 480, h: 200, bz: 2 } },
+  // 金属棒切割磁感线：ε=BLv=1×2×3=6V，I=ε/(R+r)=6/8.01≈0.75A，
+  // 安培力 F=BIL=1.5N 阻碍运动（楞次定律）→ 速度按 v=v0·e^(−t/τ)、τ=mR/(B²L²)=1s 指数衰减
+  金属棒切割磁感线: [
+    { type: 'wire', x: 500, y: 200, props: { len: 600, angle: 0 } },
+    { type: 'wire', x: 500, y: 400, props: { len: 600, angle: 0 } },
+    { type: 'resistor', x: 200, y: 250, props: { R: 6, len: 100, angle: 90 } },
+    { type: 'ammeter', x: 200, y: 350, props: { len: 100, angle: 90 } },
+    { type: 'metalRod', x: 400, y: 300, props: { len: 200, R: 2, m: 0.5, angle: 90, v0x: 3 } },
+    { type: 'uniformB', x: 500, y: 300, props: { w: 640, h: 300, bz: 1 } },
   ],
   小磁针指北: [
     { type: 'compass', x: 300, y: 300, props: { len: 48 } },
@@ -265,5 +270,26 @@ Object.assign(presets, {
     { type: 'wire', x: 340, y: 540, props: { len: 180, angle: 0 } },
     { type: 'wire', x: 495, y: 400, props: { len: 130, angle: 0 } },
     { type: 'wire', x: 495, y: 540, props: { len: 130, angle: 180 } },
+  ],
+  // 二极管单向导电：电流只能从二极管正极（三角指向端）流入，反接（旋转 180°）后灯熄灭
+  二极管单向导电: [
+    { type: 'battery', x: 200, y: 300, props: { E: 6, r: 0.5, len: 200, angle: 90 } },
+    { type: 'wire', x: 400, y: 200, props: { len: 400, angle: 0 } },
+    { type: 'wire', x: 600, y: 300, props: { len: 200, angle: 90 } },
+    { type: 'wire', x: 250, y: 400, props: { len: 100, angle: 0 } },
+    { type: 'diode', x: 350, y: 400, props: { len: 100, angle: 0 } },
+    { type: 'wire', x: 425, y: 400, props: { len: 50, angle: 0 } },
+    { type: 'bulb', x: 500, y: 400, props: { R: 12, len: 100, angle: 0 } },
+    { type: 'wire', x: 575, y: 400, props: { len: 50, angle: 0 } },
+  ],
+  // 交流电路：电源设为交流（E=6V、f=0.5Hz），灯泡亮度与电流表读数随时间波动
+  交流电路: [
+    { type: 'battery', x: 200, y: 300, props: { E: 6, r: 0.5, ac: 1, freq: 0.5, len: 200, angle: 90 } },
+    { type: 'wire', x: 250, y: 200, props: { len: 100, angle: 0 } },
+    { type: 'ammeter', x: 400, y: 200, props: { len: 200, angle: 0 } },
+    { type: 'wire', x: 550, y: 200, props: { len: 100, angle: 0 } },
+    { type: 'wire', x: 600, y: 300, props: { len: 200, angle: 90 } },
+    { type: 'bulb', x: 500, y: 400, props: { R: 12, len: 200, angle: 0 } },
+    { type: 'wire', x: 300, y: 400, props: { len: 200, angle: 0 } },
   ],
 })

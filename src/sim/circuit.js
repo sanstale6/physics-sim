@@ -1,9 +1,16 @@
 // 直流电路：端子-节点 + 节点电压法（Norton 等效，无理想电压源奇异问题）
 // 约定：端子 a 为 −，b 为 +（电池），电流正方向 a→b
 export const CIRCUIT_TYPES = [
-  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates', 'diode', 'multimeter']
+  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates', 'diode', 'multimeter', 'metalRod']
 
 export function pins(o) {
+  if (o.type === 'metalRod' && o.body) {
+    // 金属棒会滑动/被拖动：端子必须跟着刚体走，否则电路接不上
+    const len = o.props?.len ?? 200, a = o.body.angle
+    const dx = (Math.cos(a) * len) / 2, dy = (Math.sin(a) * len) / 2
+    const px = o.body.position.x, py = o.body.position.y
+    return [{ x: px - dx, y: py - dy }, { x: px + dx, y: py + dy }]
+  }
   if (o.type === 'junction') return [{ x: o.x, y: o.y }, { x: o.x, y: o.y }]   // 接点：两端重合于圆心
   if (o.type === 'plates') {
     // 极板端子 = 两板各自中点（沿法线方向）
@@ -38,6 +45,7 @@ export function resistance(o) {
     case 'resistor': return Math.max(0.01, p.R ?? 10)
     case 'bulb': return Math.max(0.5, p.R ?? 10)
     case 'plates': return 0.5   // 极板间等离子体内阻
+    case 'metalRod': return Math.max(0.01, p.R ?? 2)
     case 'diode': return p._on === false ? 1e12 : 1e-2   // 二极管：默认导通，_on=false 截止（solve 迭代判定）
     case 'multimeter': {
       const mode = ['A','V','Ω'][Math.round(p.mode ?? 0)]
@@ -151,6 +159,30 @@ function clusterNodes(els, tol = 12) {
       }
     }
   }
+  // 端子压在线段中段也算接入：只对金属棒开放（两端沿导线/导轨滑动，接触点不在导线端点处）。
+  // 其它元件不行——否则电压表等端子蹭到导线中段会把电路短接。
+  for (let i = 0; i < pts.length; i++) {
+    const owner = els.find(e => e.id === pts[i].id)
+    if (!owner || owner.type !== 'metalRod') continue
+    for (const e of els) {
+      if (e.id === owner.id || !CONDUCTORS.has(e.type)) continue
+      const ps = connPins(e)
+      const dx = ps[1].x - ps[0].x, dy = ps[1].y - ps[0].y
+      const L2 = dx * dx + dy * dy
+      if (L2 < 1) continue
+      const t = ((pts[i].x - ps[0].x) * dx + (pts[i].y - ps[0].y) * dy) / L2
+      if (t <= 0.03 || t >= 0.97) continue           // 端点交给容差聚类
+      const px = ps[0].x + t * dx, py = ps[0].y + t * dy
+      if (Math.hypot(pts[i].x - px, pts[i].y - py) >= tol) continue
+      let bi = -1, bd = Infinity                   // 并入较近端子（导线 1e-3Ω，两半等效）
+      for (let k = 0; k < pts.length; k++) {
+        if (pts[k].id !== e.id) continue
+        const d = Math.hypot(pts[k].x - pts[i].x, pts[k].y - pts[i].y)
+        if (d < bd) { bd = d; bi = k }
+      }
+      if (bi >= 0) parent[find(i)] = find(bi)
+    }
+  }
   const map = new Map()
   const nodeOf = pts.map((_, i) => {
     const r = find(i)
@@ -166,7 +198,7 @@ export function solve(objs) {
   const els = objs.filter((o) => CIRCUIT_TYPES.includes(o.type))
   if (!els.length) return null
   const key = els.map((e) => e.id + ':' + e.x.toFixed(1) + ',' + e.y.toFixed(1) + ':' + (e.props.angle ?? 0) + ':' +
-    (e.type === 'battery' ? (e.props._eInst ?? e.props.E) + '/' + e.props.r : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
+    (e.type === 'battery' ? (e.props._eInst ?? e.props.E) + '/' + e.props.r : e.type === 'metalRod' ? (e.props._eInst ?? 0).toFixed(4) + '/' + (e.props.R ?? 2) : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
   if (key === lastKey) return lastResult
 
   const { pts, nodeOf, count } = clusterNodes(els)
@@ -179,8 +211,8 @@ export function solve(objs) {
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
     if (a === nb) continue
-    if (e.type === 'battery' || e.type === 'plates') {
-      const r = e.type === 'plates' ? 0.5 : Math.max(0.01, e.props.r ?? 0.5)
+    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod') {
+      const r = e.type === 'plates' ? 0.5 : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2) : Math.max(0.01, e.props.r ?? 0.5)
       const g = 1 / r
       G[a][a] += g; G[nb][nb] += g; G[a][nb] -= g; G[nb][a] -= g
       const E = e.type === 'plates' ? (e.props.U ?? 0) : (e.props._eInst ?? e.props.E ?? 3)
@@ -215,8 +247,8 @@ export function solve(objs) {
   const currents = new Map()
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
-    if (e.type === 'battery' || e.type === 'plates') {
-      const r0 = e.type === 'plates' ? 0.5 : Math.max(0.01, e.props.r ?? 0.5)
+    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod') {
+      const r0 = e.type === 'plates' ? 0.5 : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2) : Math.max(0.01, e.props.r ?? 0.5)
       const E0 = e.type === 'plates' ? (e.props.U ?? 0) : (e.props._eInst ?? e.props.E ?? 3)
       currents.set(e.id, (V[a] - V[nb] + E0) / r0)
     }
@@ -228,7 +260,8 @@ export function solve(objs) {
   const warnings = []
   for (const e of els) {
     const i = currents.get(e.id)
-    if (e.type === 'battery') {
+    if (e.type === 'metalRod') { sourcePower += (e.props._eInst ?? 0) * i }
+    else if (e.type === 'battery') {
       const E = e.props.E ?? 3
       sourcePower += E * i
       if (Math.abs(i) > 0.75 * (E / Math.max(0.01, e.props.r ?? 0.5))) warnings.push({ kind: 'short', text: '电流接近 ε/r，疑似短路' })
@@ -241,8 +274,8 @@ export function solve(objs) {
     maxI = Math.max(maxI, Math.abs(i))
   }
   // 导线自身电阻 1e-3Ω，微小电流（<1e-6A）在导线上压降为 0 是正常现象，不算断路
-  const open = els.filter((e) => !['battery', 'switch', 'wire'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
-  if (maxI < 1e-6 && els.some((e) => e.type === 'battery')) warnings.push({ kind: 'open', text: '电路未闭合（开关断开或无回路）' })
+  const open = els.filter((e) => !['battery', 'switch', 'wire', 'metalRod'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
+  if (maxI < 1e-6 && els.some((e) => e.type === 'battery' || e.type === 'metalRod')) warnings.push({ kind: 'open', text: '电路未闭合（开关断开或无回路）' })
   else if (open.length) warnings.push({ kind: 'open', text: open.length + ' 个元件无电流（断路）' })
 
   // 二极管方向校验：电流反向（I<0）→ 截止重解一次；截止态又出现正向偏置 → 恢复导通

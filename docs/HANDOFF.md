@@ -60,12 +60,30 @@ pnpm test           # 全链回归（14 个脚本，见下）
 9. matter Body.setPosition(pos,false) 不改速度；Body.setVelocity 的 timeScale=1（baseDelta 16.667）。
 10. 不要往这台手机装浏览器/Chromium（曾装 playwright 546MB 后删）；不要试图用 mcp__phone__* 操作 Edge 验收网页（前台会被 DSH 抢回）。
 
+## 金属棒与电磁感应（metalRod，原 rail 已删）
+- 元件：src/sim/registry.js:227 起。defaults `{len:200,R:2,m:0.5,angle:90,v0x:0,v0y:0,g:0}`，body = rotRect（`inertia: Infinity` 防安培力矩把棒转起来），overlay 画 ε / I 标注
+- 电气接触：circuit.js clusterNodes 末尾「端子压在线段中段也算接入」——**只对 metalRod 开放**（其它元件蹭到导线中段会把电路短接，这条曾被放开导致 circuits2 全挂）
+- 感应电动势（engine.js 金属棒段）：ε = B·L·(vx·sinθ − vy·cosθ)，B 取棒处 uniformB 之和；写入 `rod.props._eInst`，solve 把它当电动势源
+- 安培力：Fx = I·L·(−B·sinθ)、Fy = I·L·(B·cosθ)，`FORCE_SCALE` 缩放后 applyForce
+- 重力抵消：g=0（导轨上架空）时每步施加 −m·g 抵消 matter 重力
+- **applyForces 每步只能调用一次**（body.force 累加，调两次重力抵消就被加两遍 → 棒凭空上漂）
+- 预设「金属棒切割磁感线」：B=1T、L=2m、v0=3m/s → ε=6V、I=0.749A、τ=mR/B²L²≈1s，v 指数衰减（1s 后 1.10m/s）
+- scripts/induction.mjs：18 断言（ε/I/楞次/反向 B/匀速/电路闭合）
+
+## 多用电表 / 二极管 / 交流电
+- circuit.js：CIRCUIT_TYPES 加 'diode','multimeter'；resistance：diode 导通 1e-2 / 截止 1e12（用 `p._on === false` 判据，初值 undefined 视为导通）、multimeter A=0.1Ω / V=1e6 / Ω=1e12
+- solve 尾部二极管方向迭代：I<−1e-9 判反向截止重解，恢复导通后递归一次；解完删除临时 `_on`（保缓存 key 干净）
+- 交流电源：battery defaults `ac:0, freq:0.5`；useSim raf 每物理步写 `_eInst = E·sin(2πft)`，关掉交流档时 delete `_eInst`（否则残留最后一帧值）；solve 的缓存 key 已含 `_eInst`
+- 多用电表读数：A 档 I、V 档 uAcross、Ω 档找端子重合(<14px)的电阻/变阻器/灯泡显示标称 R
+- 预设：二极管单向导电（正向 I=0.479A、角度 180 即截止）、交流电路（f=0.5Hz，I 在 0↔0.479 间摆动）
+
 ## 已知遗留 / 下一步建议
 - ~~磁铁调角度时可能与极性标注分离~~ 已修复：useSim.js 重建刚体时静态元件 setAngle 被清零，已统一传 ang
 - ~~电压表内接/外接误差演示、电桥、变阻器分压接法：未做~~ 已完成：4 个新预设（电压表外接/内接、惠斯通电桥、变阻器分压）+ scripts/circuits2.mjs 15 断言（外接 Iv=5.85e-6、电桥平衡 Ig=0/失衡 Ig=0.0346、分压 I载=0.1935）
 - wire 误报「无电流（断路）」已修复：circuit.js open-circuit 过滤加入 wire（导线 1e-3Ω 压降 0 属正常）
 - presets.js 曾有 串联电路/并联电路 重复键，已删
 - 光学四元件（lightSource/mirror/lens/screen + optics.js 光线追迹）已实现但用户说"暂时不做"——还在面板里，去留待定
+- ~~金属导轨 rail~~ 已删除，替代为「金属棒」（可运动、导电、切割磁感线）
 - 回旋加速器出盒有轻微圆心漂移（教学可接受）；出盒判定 |dy|<gap/2 时 EXIT
 - 移动端布局在很矮的屏（<560px）会隐藏动量面板
 - preset「回旋加速器」vmax 断言只是冒烟（检查不 NaN/不飞出），无精确轨迹断言

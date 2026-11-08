@@ -279,8 +279,10 @@ export function useSim() {
     if (b) {
       Matter.Body.setPosition(b, { x, y })
       Matter.Body.setVelocity(b, { x: 0, y: 0 })
-      applyV0(o)
       Matter.Body.setAngularVelocity(b, 0)
+      // 金属棒：拖到位后不要重放初速度（否则一拖就被"弹射"出去，摆不好位置）
+      if (o.type === 'metalRod') Matter.Body.setAngle(b, ((o.props.angle ?? 0) * Math.PI) / 180)
+      else applyV0(o)
     }
   }, [])
 
@@ -341,9 +343,12 @@ export function useSim() {
           // 正弦 U0·sin(2πft)，让灯泡亮度/电表读数随时间波动
           const tNow = timeRef.current
           for (const o of objsRef.current) {
-            if (o.type === 'battery' && o.props.ac) {
+            if (o.type !== 'battery') continue
+            if (o.props.ac) {
               const f = Math.max(0.01, o.props.freq ?? 1)
               o.props._eInst = (o.props.E ?? 3) * Math.sin(2 * Math.PI * f * tNow)
+            } else if (o.props._eInst !== undefined) {
+              delete o.props._eInst   // 切回直流：清掉残留的瞬时值，否则读数停在最后一帧
             }
           }
           // 面板 10Hz 刷新即可，避免每帧重渲染整个 React 树（手机上会卡点击）

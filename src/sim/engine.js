@@ -1,6 +1,7 @@
 import Matter from 'matter-js'
 import { registry } from './registry.js'
 import { frictionForce } from './contacts.js'
+import { solve } from './circuit.js'
 
 // —— 单位约定 ——
 // 100 px = 1 m；质量用 kg；力用 N；Matter 每步 16.67 ms
@@ -250,7 +251,46 @@ export function applyForces(components) {
       const gw = gravityState.on ? body.mass * GRAV.y * GRAV.scale : 0
       if (gw) Matter.Body.applyForce(body, body.position, { x: 0, y: -gw })
     }
-  }  // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
+  }
+
+  // —— 金属棒切割磁感线（电磁感应 + 楞次定律）——
+  // 感应电动势 ε = B·L·(vx sinθ − vy cosθ)（与电荷洛伦兹力同一 B 符号约定）；
+  // 安培力 F = I·L·(û × B)，方向由上式符号自动保证「阻碍相对运动」（楞次定律）。
+  const rods = components.filter(c => c.type === 'metalRod' && c.body)
+  if (rods.length) {
+    for (const rod of rods) {
+      const b = rod.body
+      const L = (rod.props.len ?? 200) / SCALE
+      const th = b.angle
+      const vx = b.velocity.x * VEL_SCALE, vy = b.velocity.y * VEL_SCALE
+      let B = 0
+      for (const f of fields) if (f.type === 'uniformB' && inside(b, f)) B += f.props.bz
+      rod.props._eInst = B * L * (vx * Math.sin(th) - vy * Math.cos(th))
+      // 导轨上的棒默认由支持力托住（g=0），否则正常受重力
+      if (!rod.props.g) {
+        const gw = gravityState.on ? b.mass * GRAV.y * GRAV.scale : 0
+        if (gw) Matter.Body.applyForce(b, b.position, { x: 0, y: -gw })
+      }
+    }
+    const res = solve(components)
+    if (res?.currents) {
+      for (const rod of rods) {
+        const b = rod.body
+        const I = res.currents.get(rod.id) ?? 0
+        if (Math.abs(I) < 1e-9) continue
+        const L = (rod.props.len ?? 200) / SCALE
+        const th = b.angle
+        let B = 0
+        for (const f of fields) if (f.type === 'uniformB' && inside(b, f)) B += f.props.bz
+        if (!B) continue
+        const Fx = I * L * (-B * Math.sin(th)), Fy = I * L * (B * Math.cos(th))
+        Matter.Body.applyForce(b, b.position, { x: Fx * FORCE_SCALE, y: Fy * FORCE_SCALE })
+        rod.props._amp = { Fx, Fy, I }
+      }
+    }
+  }
+
+  // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
   for (const mg of components) {
     if (mg.type !== 'magnet') continue
     const len = mg.props.len ?? 120, a = ((mg.props.angle ?? 0) * Math.PI) / 180
