@@ -82,21 +82,6 @@ export const presets = {
     { type: 'conveyor', x: 420, y: 520, props: { len: 560, v: 2 } },
     { type: 'block', x: 240, y: 498, props: { m: 1, mu: 0.4, v0x: 0 } },
   ],
-  串联电路: [
-    { type: 'battery', x: 260, y: 220, props: { E: 6, r: 0.5, len: 160, angle: 0 } },
-    { type: 'resistor', x: 340, y: 300, props: { R: 10, len: 160, angle: 90 } },
-    { type: 'resistor', x: 260, y: 380, props: { R: 20, len: 160, angle: 0 } },
-    { type: 'wire', x: 180, y: 300, props: { len: 160, angle: 90 } },
-  ],
-  并联电路: [
-    { type: 'battery', x: 200, y: 220, props: { E: 6, r: 0.5, len: 120, angle: 0 } },
-    { type: 'wire', x: 320, y: 220, props: { len: 120, angle: 0 } },
-    { type: 'resistor', x: 380, y: 300, props: { R: 20, len: 160, angle: 90 } },
-    { type: 'resistor', x: 260, y: 300, props: { R: 20, len: 160, angle: 90 } },
-    { type: 'wire', x: 320, y: 380, props: { len: 120, angle: 0 } },
-    { type: 'wire', x: 200, y: 380, props: { len: 120, angle: 0 } },
-    { type: 'wire', x: 140, y: 300, props: { len: 160, angle: 90 } },
-  ],
   凸透镜成像: [
     { type: 'lightSource', x: 140, y: 300, props: { rays: 9, spread: 46, angle: 0 } },
     { type: 'lens', x: 420, y: 300, props: { len: 180, f: 150, angle: 90 } },
@@ -231,5 +216,53 @@ Object.assign(presets, {
   回旋加速器: [
     { type: 'cyclotron', x: 480, y: 300, props: { R: 170, U: 2, B: 2 } },
     { type: 'charge', x: 480, y: 300, props: { q: 1, m: 0.5, r: 8, v0x: 2, v0y: 0 } },
+  ],
+  // 电压表外接：V 直接并在 R 两端（A 在干路）。I = 6/20.5 ≈ 0.2927A，V 读数 = U_R（偏小方向）
+  电压表外接: [
+    { type: 'battery', x: 400, y: 300, props: { E: 6, r: 0.5, len: 120, angle: 90 } },
+    { type: 'ammeter', x: 400, y: 420, props: { len: 120, angle: 90 } },
+    { type: 'resistor', x: 400, y: 540, props: { R: 20, len: 120, angle: 90 } },
+    { type: 'voltmeter', x: 560, y: 540, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 400, y: 360, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 400, y: 480, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 400, y: 200, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 480, y: 460, props: { len: 160, angle: 180 } },
+    { type: 'wire', x: 480, y: 600, props: { len: 160, angle: 180 } },
+  ],
+  // 电压表内接：V 跨在「A+R」两端，读数含 A 分压（偏大方向）。对比外接看误差方向
+  电压表内接: [
+    { type: 'battery', x: 400, y: 300, props: { E: 6, r: 0.5, len: 120, angle: 90 } },
+    { type: 'ammeter', x: 400, y: 420, props: { len: 120, angle: 90 } },
+    { type: 'resistor', x: 400, y: 540, props: { R: 20, len: 120, angle: 90 } },
+    { type: 'voltmeter', x: 560, y: 480, props: { len: 240, angle: 90 } },
+    { type: 'wire', x: 400, y: 360, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 400, y: 480, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 400, y: 200, props: { len: 120, angle: 90 } },
+    { type: 'wire', x: 480, y: 360, props: { len: 160, angle: 180 } },
+    { type: 'wire', x: 480, y: 600, props: { len: 160, angle: 180 } },
+  ],
+  // 惠斯通电桥：R1=R2=R3=R4=20 平衡 → 桥（灯泡 G）无电流；把 R4 改 40 看失衡偏转
+  惠斯通电桥: [
+    { type: 'battery', x: 250, y: 400, props: { E: 6, r: 0.5, len: 280, angle: 90 } },
+    { type: 'resistor', x: 430, y: 330, props: { R: 20, len: 140, angle: 90 } },
+    { type: 'resistor', x: 430, y: 470, props: { R: 20, len: 140, angle: 90 } },
+    { type: 'resistor', x: 630, y: 330, props: { R: 20, len: 140, angle: 90 } },
+    { type: 'resistor', x: 630, y: 470, props: { R: 40, len: 140, angle: 90 } },
+    { type: 'bulb', x: 530, y: 400, props: { R: 5, len: 200, angle: 0 } },
+    { type: 'wire', x: 340, y: 260, props: { len: 180, angle: 0 } },
+    { type: 'wire', x: 530, y: 260, props: { len: 200, angle: 0 } },
+    { type: 'wire', x: 340, y: 540, props: { len: 180, angle: 0 } },
+    { type: 'wire', x: 530, y: 540, props: { len: 200, angle: 0 } },
+  ],
+  // 滑动变阻器分压：变阻器 20Ω（上下两半各 10），负载 10Ω 并在下半段。I干≈0.387A、I载≈0.194A
+  变阻器分压: [
+    { type: 'battery', x: 250, y: 400, props: { E: 6, r: 0.5, len: 280, angle: 90 } },
+    { type: 'resistor', x: 430, y: 330, props: { R: 10, len: 140, angle: 90 } },
+    { type: 'resistor', x: 430, y: 470, props: { R: 10, len: 140, angle: 90 } },
+    { type: 'resistor', x: 560, y: 470, props: { R: 10, len: 140, angle: 90 } },
+    { type: 'wire', x: 340, y: 260, props: { len: 180, angle: 0 } },
+    { type: 'wire', x: 495, y: 400, props: { len: 130, angle: 0 } },
+    { type: 'wire', x: 495, y: 540, props: { len: 130, angle: 0 } },
+    { type: 'wire', x: 340, y: 540, props: { len: 180, angle: 0 } },
   ],
 })

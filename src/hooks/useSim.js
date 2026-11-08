@@ -221,7 +221,9 @@ export function useSim() {
         Matter.Composite.remove(engine.world, o.body)
         const nb = makeBody({ ...o, x: pos.x, y: pos.y })
         if (nb) {
-          Matter.Body.setAngle(nb, nb.isStatic ? 0 : ang)
+          // 统一保留原角度：静态元件（磁铁/斜面等 rotRect）丢角度会导致
+          // 碰撞体回正而 N/S 极标注、磁感线仍按 props.angle 绘制 → 视觉分离
+          Matter.Body.setAngle(nb, ang)
           Matter.Body.setVelocity(nb, vel)
           Matter.Body.setAngularVelocity(nb, av)
           Matter.Composite.add(engine.world, nb)

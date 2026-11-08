@@ -233,7 +233,8 @@ export function solve(objs) {
     }
     maxI = Math.max(maxI, Math.abs(i))
   }
-  const open = els.filter((e) => !['battery', 'switch'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
+  // 导线自身电阻 1e-3Ω，微小电流（<1e-6A）在导线上压降为 0 是正常现象，不算断路
+  const open = els.filter((e) => !['battery', 'switch', 'wire'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
   if (maxI < 1e-6 && els.some((e) => e.type === 'battery')) warnings.push({ kind: 'open', text: '电路未闭合（开关断开或无回路）' })
   else if (open.length) warnings.push({ kind: 'open', text: open.length + ' 个元件无电流（断路）' })
 
