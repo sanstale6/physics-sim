@@ -1,7 +1,7 @@
 // 直流电路：端子-节点 + 节点电压法（Norton 等效，无理想电压源奇异问题）
 // 约定：端子 a 为 −，b 为 +（电池），电流正方向 a→b
 export const CIRCUIT_TYPES = [
-  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates']
+  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates', 'diode', 'multimeter']
 
 export function pins(o) {
   if (o.type === 'junction') return [{ x: o.x, y: o.y }, { x: o.x, y: o.y }]   // 接点：两端重合于圆心
@@ -38,6 +38,13 @@ export function resistance(o) {
     case 'resistor': return Math.max(0.01, p.R ?? 10)
     case 'bulb': return Math.max(0.5, p.R ?? 10)
     case 'plates': return 0.5   // 极板间等离子体内阻
+    case 'diode': return p._on === false ? 1e12 : 1e-2   // 二极管：默认导通，_on=false 截止（solve 迭代判定）
+    case 'multimeter': {
+      const mode = ['A','V','Ω'][Math.round(p.mode ?? 0)]
+      if (mode === 'A') return 0.1        // 电流档：串联低内阻（含表笔）
+      if (mode === 'V') return 1e6        // 电压档：并联高内阻
+      return 1e12                         // 欧姆档：脱离电源使用，不参与电路求解
+    }
     default: return null
   }
 }
@@ -159,7 +166,7 @@ export function solve(objs) {
   const els = objs.filter((o) => CIRCUIT_TYPES.includes(o.type))
   if (!els.length) return null
   const key = els.map((e) => e.id + ':' + e.x.toFixed(1) + ',' + e.y.toFixed(1) + ':' + (e.props.angle ?? 0) + ':' +
-    (e.type === 'battery' ? e.props.E + '/' + e.props.r : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
+    (e.type === 'battery' ? (e.props._eInst ?? e.props.E) + '/' + e.props.r : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
   if (key === lastKey) return lastResult
 
   const { pts, nodeOf, count } = clusterNodes(els)
@@ -176,7 +183,7 @@ export function solve(objs) {
       const r = e.type === 'plates' ? 0.5 : Math.max(0.01, e.props.r ?? 0.5)
       const g = 1 / r
       G[a][a] += g; G[nb][nb] += g; G[a][nb] -= g; G[nb][a] -= g
-      const E = e.type === 'plates' ? (e.props.U ?? 0) : (e.props.E ?? 3)
+      const E = e.type === 'plates' ? (e.props.U ?? 0) : (e.props._eInst ?? e.props.E ?? 3)
       I[nb] += E * g; I[a] -= E * g
     } else {
       const g = 1 / resistance(e)
@@ -210,7 +217,7 @@ export function solve(objs) {
     const { a, b: nb } = idx.get(e.id)
     if (e.type === 'battery' || e.type === 'plates') {
       const r0 = e.type === 'plates' ? 0.5 : Math.max(0.01, e.props.r ?? 0.5)
-      const E0 = e.type === 'plates' ? (e.props.U ?? 0) : (e.props.E ?? 3)
+      const E0 = e.type === 'plates' ? (e.props.U ?? 0) : (e.props._eInst ?? e.props.E ?? 3)
       currents.set(e.id, (V[a] - V[nb] + E0) / r0)
     }
     else currents.set(e.id, (V[a] - V[nb]) / resistance(e))
@@ -237,6 +244,18 @@ export function solve(objs) {
   const open = els.filter((e) => !['battery', 'switch', 'wire'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
   if (maxI < 1e-6 && els.some((e) => e.type === 'battery')) warnings.push({ kind: 'open', text: '电路未闭合（开关断开或无回路）' })
   else if (open.length) warnings.push({ kind: 'open', text: open.length + ' 个元件无电流（断路）' })
+
+  // 二极管方向校验：电流反向（I<0）→ 截止重解一次；截止态又出现正向偏置 → 恢复导通
+  let diodeChanged = false
+  for (const e of els) {
+    if (e.type !== 'diode') continue
+    const { a, b: nb } = idx.get(e.id)
+    const i = currents.get(e.id)
+    if (e.props._on !== false && i < -1e-9) { e.props._on = false; diodeChanged = true }
+    else if (e.props._on === false && V[a] - V[nb] > 1e-6) { delete e.props._on; diodeChanged = true }
+  }
+  if (diodeChanged) return solve(objs)
+  for (const e of els) if (e.type === 'diode') delete e.props._on   // 还原临时状态，key 缓存才有效
 
   lastKey = key
   lastResult = { V, currents, power, nodeOf: idx, nodeCount: N, totalPower, sourcePower, warnings }

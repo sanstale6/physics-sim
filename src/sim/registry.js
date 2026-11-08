@@ -1,5 +1,5 @@
 import Matter from 'matter-js'
-import { solve } from './circuit.js'
+import { solve, pins } from './circuit.js'
 import { fieldAt } from './magnetism.js'
 import { capacitance } from './engine.js'
 
@@ -512,10 +512,12 @@ export const registry = {
   },
   battery: {
     name: '电源',
-    defaults: () => ({ E: 6, r: 0.5, len: 90, angle: 0 }),
+    defaults: () => ({ E: 6, r: 0.5, len: 90, angle: 0, ac: 0, freq: 0.5 }),
     fields: [
       { key: 'E', label: '电动势 E', unit: 'V', min: 0.5, max: 24, step: 0.5 },
       { key: 'r', label: '内阻 r', unit: 'Ω', min: 0.05, max: 10, step: 0.05 },
+      { key: 'ac', label: '交流（0=直流 1=交流）', unit: '', min: 0, max: 1, step: 1 },
+      { key: 'freq', label: '交流频率 f', unit: 'Hz', min: 0.1, max: 5, step: 0.1 },
       { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
       { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
     ],
@@ -579,6 +581,27 @@ export const registry = {
     name: '电压表',
     defaults: () => ({ len: 90, angle: 0 }),
     fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  diode: {
+    name: '二极管',
+    defaults: () => ({ len: 90, angle: 0 }),
+    fields: [
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
+  multimeter: {
+    name: '多用电表',
+    defaults: () => ({ mode: 'A', len: 90, angle: 0 }),
+    fields: [
+      { key: 'mode', label: '档位', unit: '', min: 0, max: 0, step: 1, options: ['A（直流电流）', 'V（直流电压）', 'Ω（电阻）'] },
       { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
       { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
     ],
@@ -981,11 +1004,21 @@ function drawCircuit(ctx, c, all) {
       break
     }
     case 'ammeter':
-    case 'voltmeter': {
+    case 'voltmeter':
+    case 'multimeter': {
       ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * LW
       ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke()
       ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.fillText(c.type === 'ammeter' ? 'A' : 'V', 0, 1)
+      const mchar = c.type === 'multimeter' ? ['A','V','Ω'][Math.round(p.mode ?? 0)] : (c.type === 'ammeter' ? 'A' : 'V')
+      ctx.fillText(mchar, 0, 1)
+      break
+    }
+    case 'diode': {
+      // 三角形指向正极 a→b 导通方向 + 竖杠
+      ctx.fillStyle = '#dbe6f5'
+      ctx.beginPath(); ctx.moveTo(-10, -9); ctx.lineTo(-10, 9); ctx.lineTo(10, 0); ctx.closePath(); ctx.fill()
+      ctx.strokeStyle = '#dbe6f5'; ctx.lineWidth = 2 * LW
+      line(10, -9, 10, 9)
       break
     }
     default: break
@@ -1035,6 +1068,19 @@ function drawCircuit(ctx, c, all) {
   if (c.type === 'voltmeter') {
     const u = res ? Math.abs(uAcross(res, c, all)) : 0
     label = `U=${u.toFixed(2)}V`
+  }
+  if (c.type === 'multimeter') {
+    const mode = ['A','V','Ω'][Math.round(p.mode ?? 0)]
+    if (mode === 'A') label = `I=${Math.abs(I).toFixed(3)}A`
+    else if (mode === 'V') label = `U=${Math.abs(uAcross(res, c, all)).toFixed(2)}V`
+    else {
+      // Ω 档：表笔接在电阻类元件两端时显示其标称阻值（高中用法：测前断电、单独测量）
+      const ps = pins(c)
+      const target = all.find(e => e !== c && ['resistor', 'rheostat', 'bulb'].includes(e.type) &&
+        pins(e).every((q, k) => Math.hypot(q.x - ps[k === 0 ? 0 : 1].x, q.y - ps[k === 0 ? 0 : 1].y) < 14 ||
+                                   Math.hypot(q.x - ps[k === 0 ? 1 : 0].x, q.y - ps[k === 0 ? 1 : 0].y) < 14))
+      label = target ? `R=${target.props.R}Ω` : '---'
+    }
   }
   if (label) {
     const w = ctx.measureText(label).width

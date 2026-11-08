@@ -204,7 +204,7 @@ Object.assign(presets, {
   // 电子枪偏转：a = qU/(md) = 5*1.4/(0.5*1.4)…取 U=5V → a=10 m/s²，穿越 3m 用时 0.5s，侧移 1.25m 合理
   电子枪偏转: [
     { type: 'electronGun', x: 140, y: 300, props: { q: -1, m: 0.5, v: 6, rate: 1.2, angle: 0 } },
-    { type: 'plates', x: 480, y: 300, props: { len: 300, gap: 140, U: 5, angle: 0 } },
+    { type: 'plates', x: 480, y: 300, props: { len: 300, gap: 140, U: 3, angle: 0 } },
     { type: 'uniformB', x: 820, y: 160, props: { w: 300, h: 440, bz: -1.5 } },
   ],
   // 磁流体发电机：电荷入区被 B 分偏 → 附着极板 → U=Q/C 涨至平衡 U=vBd=8×2×1.6=25.6V（开路电压），此后后续电荷直穿

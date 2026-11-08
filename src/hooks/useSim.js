@@ -337,6 +337,15 @@ export function useSim() {
         if (n === MAX_STEPS) acc = 0
         if (n) {
           timeRef.current += (n * STEP_MS) / 1000
+          // 交流电源：每个物理步更新瞬时电动势 _eInst（solve 取 _eInst ?? E）
+          // 正弦 U0·sin(2πft)，让灯泡亮度/电表读数随时间波动
+          const tNow = timeRef.current
+          for (const o of objsRef.current) {
+            if (o.type === 'battery' && o.props.ac) {
+              const f = Math.max(0.01, o.props.freq ?? 1)
+              o.props._eInst = (o.props.E ?? 3) * Math.sin(2 * Math.PI * f * tNow)
+            }
+          }
           // 面板 10Hz 刷新即可，避免每帧重渲染整个 React 树（手机上会卡点击）
           if (now - lastPub > 120) { lastPub = now; setTime(timeRef.current); bump() }
         }
