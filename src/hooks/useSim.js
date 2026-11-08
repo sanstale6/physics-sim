@@ -72,12 +72,13 @@ export function useSim() {
     Matter.Body.setVelocity(o.body, { x: v0x / VEL_SCALE, y: -v0y / VEL_SCALE })
   }
 
-  const spawn = useCallback((type, x, y, props, angle = 0) => {
+  const spawn = useCallback((type, x, y, props, angle = 0, explicitId = null) => {
     const reg = registry[type]
     if (!reg) return null
     const p = { ...reg.defaults(), ...props }
     if (angle) p.angle = angle
-    const obj = { id: nextId++, type, props: p, x, y, angle, body: null, home: { x, y, angle } }
+    const obj = { id: explicitId ?? nextId++, type, props: p, x, y, angle, body: null, home: { x, y, angle } }
+    if (explicitId != null && explicitId >= nextId) nextId = explicitId + 1
     // 绳 / 弹簧 / 滑轮 / 单摆：放置时记住最近的两个动态物体作为两端
     if (LINK_TYPES.has(type) && p._a == null) {
       const near = objsRef.current
@@ -111,7 +112,7 @@ export function useSim() {
   const restore = useCallback((items) => {
     const engine = ensureWorld()
     Matter.Composite.clear(engine.world, false)
-    objsRef.current = items.map(it => spawn(it.type, it.x, it.y, it.props, it.angle || 0)).filter(Boolean)
+    objsRef.current = items.map((it, i) => spawn(it.type, it.x, it.y, it.props, it.angle || 0, it.id ?? i + 1)).filter(Boolean)
     timeRef.current = 0; setTime(0)
     setCount(objsRef.current.length); setEpoch(e => e + 1); bump()
   }, [spawn])
@@ -252,8 +253,26 @@ export function useSim() {
         if (snap) { x = snap.x - sx; y = snap.y - sy; break }
       }
     }
+    const ox = o.x, oy = o.y
     o.x = x; o.y = y
     o.home = { x, y, angle: o.home?.angle ?? 0 }   // 拖到新位置后，重置就回到这里
+    // 并联态跟随：移动某个元件后，把「两端吸附在该元件端子附近」的并联态元件的 a1/a2 同步平移
+    if (CIRCUIT_TYPES.includes(o.type) && (ox !== x || oy !== y)) {
+      const a = ((o.props.angle ?? 0) * Math.PI) / 180
+      const len = o.props.len ?? 90
+      const dxh = (Math.cos(a) * len) / 2, dyh = (Math.sin(a) * len) / 2
+      const oldPins = [{ x: ox - dxh, y: oy - dyh }, { x: ox + dxh, y: oy + dyh }]
+      const ddx = x - ox, ddy = y - oy
+      for (const t of objsRef.current) {
+        const par = t.props?._par
+        if (!par || t.id === id) continue
+        for (const key of ['a1', 'a2']) {
+          const q = par[key]
+          if (!q) continue
+          if (oldPins.some(pn => Math.hypot(pn.x - q.x, pn.y - q.y) < 14)) { q.x += ddx; q.y += ddy }
+        }
+      }
+    }
     const b = o.body
     if (b) {
       Matter.Body.setPosition(b, { x, y })

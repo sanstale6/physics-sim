@@ -13,7 +13,8 @@ function fromB64(b64) {
 }
 
 export function encodeScene(items) {
-  return toB64(JSON.stringify(items))
+  const safe = items.map((o, i) => ({ id: o.id ?? i + 1, type: o.type, x: o.x, y: o.y, angle: o.angle, props: o.props }))
+  return toB64(JSON.stringify(safe))
 }
 export function decodeScene(code) {
   try {
