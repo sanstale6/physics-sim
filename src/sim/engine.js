@@ -180,7 +180,7 @@ export function applyForces(components) {
         const endX = cx + rx * cs - ry * sn, endY = cy + rx * sn + ry * cs
         // matter velocity 单位 = px/step。预补偿：把位置放到「终点 − 一步位移」，让 Engine.update
         // 的直线积分恰好落在弧终点；positionPrev 同步回退一步，Verlet 速度保持不变。
-        if (globalThis.__dbg) globalThis.__dbg({phiSum, R, vpx0, px: body.position.x, py: body.position.y, cx, cy, endX, endY})
+        //（调试钩子已移除）
         const vel = body.velocity
         Matter.Body.setPosition(body, { x: endX - vel.x, y: endY - vel.y }, false)
         body.positionPrev.x = body.position.x - vel.x
