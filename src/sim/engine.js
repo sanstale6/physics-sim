@@ -65,8 +65,8 @@ export function applyForces(components) {
       const F = K * charges[i].props.q * uC * charges[j].props.q * uC / (r * r) // N
       const Fm = F * FORCE_SCALE
       const ux = dx / rPx, uy = dy / rPx
-      Matter.Body.applyForce(a, a.position, { x: -Fm * ux, y: Fm * uy })
-      Matter.Body.applyForce(b, b.position, { x: Fm * ux, y: -Fm * uy })
+      Matter.Body.applyForce(a, a.position, { x: -Fm * ux, y: -Fm * uy })
+      Matter.Body.applyForce(b, b.position, { x: Fm * ux, y: Fm * uy })
     }
 
   // 场区域内的电荷

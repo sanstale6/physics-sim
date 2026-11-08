@@ -207,11 +207,11 @@ Object.assign(presets, {
     { type: 'plates', x: 480, y: 300, props: { len: 300, gap: 140, U: 5, angle: 0 } },
     { type: 'uniformB', x: 820, y: 160, props: { w: 300, h: 440, bz: -1.5 } },
   ],
-  // 磁流体发电机：U=vBd=8×2×1.6=25.6V 为理论开路电压；演示取 U=8V 观察电荷分飞与偏转
+  // 磁流体发电机：电荷入区被 B 分偏 → 附着极板 → U=Q/C 涨至平衡 U=vBd=8×2×1.6=25.6V（开路电压），此后后续电荷直穿
   磁流体发电机: [
-    { type: 'plates', x: 400, y: 300, props: { len: 320, gap: 160, U: 8, angle: 0 } },
+    { type: 'plates', x: 400, y: 300, props: { len: 320, gap: 160, U: 0, angle: 0 } },
     { type: 'uniformB', x: 400, y: 300, props: { w: 380, h: 280, bz: 2 } },
-    { type: 'charge', x: 220, y: 300, props: { q: 1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
+    { type: 'charge', x: 220, y: 260, props: { q: 1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
     { type: 'charge', x: 220, y: 340, props: { q: -1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
   ],
   回旋加速器: [
