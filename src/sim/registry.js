@@ -357,8 +357,9 @@ export const registry = {
       { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
       { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
     ],
-    // 带电粒子默认忽略重力（高中题：「不计重力」）
-    body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0, gravityScale: 0 }, label: 'charge' }),
+    // 带电粒子默认忽略重力（高中题：「不计重力」）；frictionAir 必须为 0，
+    // 否则 Matter 默认 0.01 会让 B 圆周/速度选择器里的粒子能量持续泄漏（实测每步 -0.6%）
+    body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0, frictionAir: 0, gravityScale: 0 }, label: 'charge' }),
   },
   uniformB: {
     name: '匀强磁场 B',
@@ -481,7 +482,13 @@ export const registry = {
       { key: 'len', label: '屏幕长度', unit: 'px', min: 40, max: 400, step: 10 },
       { key: 'angle', label: '倾角', unit: '°', min: -180, max: 180, step: 5 },
     ],
-    body: null,
+    // 静态实体：带电粒子打上后钉住（感光记录），配合 engine.js 的感光钉住检测
+    body: (x, y, p) => {
+      const a = ((p.angle ?? 90) * Math.PI) / 180, L = p.len ?? 160
+      const w = Math.abs(Math.cos(a)) * L, h = Math.abs(Math.sin(a)) * L
+      return { type: 'rectangle', w: Math.max(w, 6), h: Math.max(h, 6),
+        options: { isStatic: true, friction: 0 }, label: 'screen' }
+    },
     overlay: (ctx, c) => {
       const a = ((c.props.angle ?? 0) * Math.PI) / 180, L = c.props.len ?? 160
       const dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2

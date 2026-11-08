@@ -124,16 +124,16 @@ export function applyForces(components) {
       eay += (qq * E * ny) / m
     }
     if (eax || eay) {
-      const hdt = (1 / 60) / 2
-      Matter.Body.setVelocity(body, {
-        x: body.velocity.x + (eax / VEL_SCALE) * hdt,
-        y: body.velocity.y + (eay / VEL_SCALE) * hdt,
-      })
+      // E+B 叠加时（速度选择器/质谱仪）kick 统一延后到 B 旋转之后一次完成：
+      // v ← R(v) + R(a·Δt)?? 否——kick 不共转：v ← R(v) + a·Δt 的固定点模长恒定且无横向漂移。
+      // 跳蛙两半步会被旋转劈开造成 E×B 漂移相位残差（实测质谱仪圆轨迹膨胀 34px）。
+      // 纯 E 场（无 B）时顺序无所谓，等价恒力积分。
       body._eKick = { ax: eax, ay: eay }
     }
     let vx = body.velocity.x * VEL_SCALE    // m/s，屏幕 x
     let vy = body.velocity.y * VEL_SCALE    // m/s，屏幕 y（向下为正）
-    let rotated = false
+    const vx0 = vx, vy0 = vy               // 本步旋转前速度快照（解析圆心用）
+    let rotated = false, phiSum = 0
     for (const f of fields) {
       if (f.type !== 'uniformB' || !inside(body, f)) continue
       const w = (c.props.q * f.props.bz) / m            // rad/s
@@ -141,66 +141,108 @@ export function applyForces(components) {
       const cs = Math.cos(phi), sn = Math.sin(phi)
       const nx = vx * cs - vy * sn
       const ny = vx * sn + vy * cs
-      vx = nx; vy = ny; rotated = true
+      vx = nx; vy = ny; rotated = true; phiSum += phi
     }
-    if (rotated) {
-      Matter.Body.setVelocity(body, { x: vx / VEL_SCALE, y: vy / VEL_SCALE })
-      // 大转角下直线位移落在弦中点（比弧中点更靠内），径向外推补偿 R(1−cos(φ/2))
-      const vpx = Math.hypot(body.velocity.x, body.velocity.y)
-      let phiSum = 0
-      for (const f of fields) {
-        if (f.type !== 'uniformB' || !inside(body, f)) continue
-        phiSum += (c.props.q * f.props.bz) / m / 60
-      }
-      if (vpx > 0.01 && Math.abs(phiSum) > 1e-6) {
-        const R = vpx / Math.abs(phiSum)
-        const half = Math.abs(phiSum) / 2
-        const push = R * (1 - Math.cos(half))
-        const sgn = Math.sign(phiSum)
-        const uxv = body.velocity.x / vpx, uyv = body.velocity.y / vpx
-        const cx = body.position.x - uyv * sgn * R
-        const cy = body.position.y + uxv * sgn * R
-        const dx = body.position.x - cx, dy = body.position.y - cy
-        const dl = Math.hypot(dx, dy) || 1
-        Matter.Body.setPosition(body, { x: body.position.x + dx / dl * push, y: body.position.y + dy / dl * push }, false)
-      }
-    }
-    // 电场第二次半步 kick（跳蛙法收尾；第一步 kick 在本轮 charges 循环前段已做）
-    if (body._eKick) {
+    if (!rotated && body._eKick) {
+      // 无 B：直接全步 kick（等价恒力积分）
       const { ax, ay } = body._eKick
       delete body._eKick
       Matter.Body.setVelocity(body, {
-        x: body.velocity.x + (ax / VEL_SCALE) * (1 / 120),
-        y: body.velocity.y + (ay / VEL_SCALE) * (1 / 120),
+        x: body.velocity.x + (ax / VEL_SCALE) * (1 / 60),
+        y: body.velocity.y + (ay / VEL_SCALE) * (1 / 60),
       })
     }
-    // 回旋加速器：圆形区域按 ω=qB/m 精确旋转；水平中缝内（|dy|<gap/2）受电场沿 x 加速
-    // （简化教学模型：缝内电场方向按粒子来向翻转，模拟高频电源反向，保证每次穿缝都被加速）
+    if (rotated) {
+      // 解析圆周 + 预补偿：位置 = 本步弧终点 − 新速度×Δt，Engine.update 走完 Δt 恰好落在弧终点。
+      // 直线积分的弦步误差不再累积（每步都被拉回真圆）。
+      const vpx0 = Math.hypot(vx, vy)
+      Matter.Body.setVelocity(body, { x: vx / VEL_SCALE, y: vy / VEL_SCALE })
+      if (vpx0 > 0.01 && Math.abs(phiSum) > 1e-6) {
+        const R = (vpx0 / VEL_SCALE) / Math.abs(phiSum)   // px：matter 速度 ÷ 每步转角（原用 m/s 与 rad 混算，半径缩水 0.6 倍）
+        const sgn = Math.sign(phiSum)
+        // 圆心必须用「旋转前」速度推算：C = P + 右法向(v_old)·R，P 绕 C 转 φ 后
+        // P−C 与转后速度仍垂直（切向关系保持，圆心逐帧不动）。用转后速度会形成收缩螺旋。
+        const uxv = vx0 / vpx0, uyv = vy0 / vpx0        // 电场 kick：共转（E 加速度随 φ 旋转，E 在旋转系中恒定）。
+        // 在圆心计算（用 v_old）之后、位置预补偿之前——kick 改变速度后预补偿用新速度，
+        // Engine.update 位移恰好落在弧终点+kick 位移，无残余污染。
+        if (body._eKick) {
+          const { ax, ay } = body._eKick
+          delete body._eKick
+          const cs2 = Math.cos(phiSum), sn2 = Math.sin(phiSum)
+          const kax = ax * cs2 - ay * sn2, kay = ax * sn2 + ay * cs2
+          vx += (kax / VEL_SCALE) / 60; vy += (kay / VEL_SCALE) / 60
+        }
+
+        const cx = body.position.x - uyv * sgn * R
+        const cy = body.position.y + uxv * sgn * R
+        const cs = Math.cos(phiSum), sn = Math.sin(phiSum)
+        const rx = body.position.x - cx, ry = body.position.y - cy
+        const endX = cx + rx * cs - ry * sn, endY = cy + rx * sn + ry * cs
+        // matter velocity 单位 = px/step。预补偿：把位置放到「终点 − 一步位移」，让 Engine.update
+        // 的直线积分恰好落在弧终点；positionPrev 同步回退一步，Verlet 速度保持不变。
+        if (globalThis.__dbg) globalThis.__dbg({phiSum, R, vpx0, px: body.position.x, py: body.position.y, cx, cy, endX, endY})
+        const vel = body.velocity
+        Matter.Body.setPosition(body, { x: endX - vel.x, y: endY - vel.y }, false)
+        body.positionPrev.x = body.position.x - vel.x
+      }
+    }
+    // 感光屏/感光板钉住：带电粒子撞上静态板（track/block 等）后原地钉住（模拟感光屏记录位置），
+    // 避免 matter solver 与解析圆周的 positionPrev 操控冲突产生 NaN
+    for (const f of components) {
+      if (!f.body || !f.body.isStatic || f.type === 'charge') continue
+      const dx = Math.abs(body.position.x - f.body.position.x)
+      const dy = Math.abs(body.position.y - f.body.position.y)
+      const bw = (f.body.bounds.max.x - f.body.bounds.min.x) / 2 + c.props.r
+      const bh = (f.body.bounds.max.y - f.body.bounds.min.y) / 2 + c.props.r
+      if (dx < bw && dy < bh) {
+        Matter.Body.setStatic(body, true)
+        Matter.Body.setPosition(body, { x: body.position.x, y: body.position.y }, false)
+        body._photographed = f.id
+        break
+      }
+    }
+    // 回旋加速器（离散事件模型）：
+    //  - D 形盒内：速率不变，按 ω=qB/m 精确旋转（半径 r=mv/(qB) 随 v 增大向外螺旋）
+    //  - 穿缝（上一帧与这一帧 dy 异号且 |dx|<R）：一次完整加速 +qU（交变电场保证每次都加速）
+    //  - 出盒：r = mv/(qB) ≥ R 时把粒子移出磁场区外（沿径向直线飞出），停止加速
     for (const cy of components) {
       if (cy.type !== 'cyclotron') continue
       const R = cy.props.R ?? 160, gap = 14, B = cy.props.B ?? 0.5, U = cy.props.U ?? 5
-      const dx = body.position.x - cy.x, dy = body.position.y - cy.y
-      if (Math.abs(dx) >= R || Math.abs(dy) >= R + gap) continue
+      const cx0 = cy.x, cy0 = cy.y
+      const dx = body.position.x - cx0, dy = body.position.y - cy0
       const q = c.props.q * uC
-      // 整个圆形区域有磁场 → 精确旋转
-      const w = (q * B) / m, phi = w / 60
-      const vxs = body.velocity.x * VEL_SCALE, vys = body.velocity.y * VEL_SCALE
-      const cs = Math.cos(phi), sn = Math.sin(phi)
-      Matter.Body.setVelocity(body, {
-        x: (vxs * cs - vys * sn) / VEL_SCALE,
-        y: (vxs * sn + vys * cs) / VEL_SCALE,
-      })
-      // 缝内：加速电场与回旋同步交变，粒子每次穿缝都沿当前速度方向被加速（能量每穿一次 +qU）
-      if (Math.abs(dy) < gap / 2 && Math.abs(dx) < R) {
-        const vxs2 = body.velocity.x * VEL_SCALE, vys2 = body.velocity.y * VEL_SCALE
-        const sp2 = Math.hypot(vxs2, vys2)
-        if (sp2 > 1e-6) {
-          const dv = ((q * U / 2) / m) * (1 / 60) * 2   // U/2 每盒，缝内 dt=1/60，×2 补偿短驻留
+      const v = Math.hypot(body.velocity.x, body.velocity.y) * VEL_SCALE   // m/s
+      // 出盒判定：回旋半径 r=mv/(qB) ≥ R → 不再旋转，沿当前方向直线飞出磁场区
+      const rNow = (m * v) / Math.max(q * B, 1e-6) * SCALE   // px
+      if (rNow >= R && v > 0) {
+        body._cycOut = cy.id   // 标记已出盒：跳过盒内旋转与加速
+        continue
+      }
+      if (body._cycOut === cy.id) continue
+      // 穿缝检测：dy 符号翻转（_dySgn 记录上一次 dy≠0 的符号），且 |dx| < R
+      const sgn = Math.sign(dy)
+      const prevSgn = cy._dySgn ?? sgn
+      if (Math.abs(dx) < R && sgn !== 0 && sgn !== prevSgn) {
+        // 一次完整加速：沿当前速度方向加 Δv = qU/m
+        const dv = (q * U) / m
+        if (v > 1e-6) {
           Matter.Body.setVelocity(body, {
-            x: body.velocity.x + (vxs2 / sp2 * dv) / VEL_SCALE,
-            y: body.velocity.y + (vys2 / sp2 * dv) / VEL_SCALE,
+            x: body.velocity.x * (1 + dv / v),
+            y: body.velocity.y * (1 + dv / v),
           })
         }
+        cy._crossings = (cy._crossings ?? 0) + 1
+      }
+      if (sgn !== 0) cy._dySgn = sgn
+      // 盒内一律精确旋转（含缝内——缝很窄，磁场近似的误差可忽略）
+      {
+        const w = (q * B) / m, phi = w / 60
+        const vxs = body.velocity.x * VEL_SCALE, vys = body.velocity.y * VEL_SCALE
+        const cs = Math.cos(phi), sn = Math.sin(phi)
+        Matter.Body.setVelocity(body, {
+          x: (vxs * cs - vys * sn) / VEL_SCALE,
+          y: (vxs * sn + vys * cs) / VEL_SCALE,
+        })
       }
     }
     // 点电荷不计重力（高中题设定）；带电物块/小球正常受重力

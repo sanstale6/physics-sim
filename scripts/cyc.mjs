@@ -19,7 +19,7 @@ const near = (name, got, want, tol) => {
   let finalV = 0
   for (let i = 0; i < 300; i++) { applyForces([cy, ch]); Matter.Engine.update(w, 1000/60) }
   finalV = Math.hypot(ch.body.velocity.x, ch.body.velocity.y) * VEL_SCALE
-  near('回旋加速 出盒速率 > 2 倍初速', finalV, 4.0, 0.5)
+  near('回旋加速 出盒速率 = 2+2×qU/m = 10', finalV, 10.0, 1.0)
 }
 // 2) 磁场内圆周速率守恒（基础约束不受 cyclotron 代码影响）
 {

@@ -193,12 +193,13 @@ Object.assign(presets, {
     { type: 'uniformE', x: 400, y: 300, props: { w: 440, h: 300, ex: 0, ey: 20 } },
     { type: 'uniformB', x: 400, y: 300, props: { w: 440, h: 300, bz: 2 } },
   ],
-  // 质谱仪：选择器 E/B=10 直进，偏转区 B’=-1 → R = mv/(qB’) = 10px…改 m=2 看 R=mv/(qB’)
+  // 质谱仪：选择器 E/B=10 直进，偏转区 B’=10 → R=mv/(qB’)=1×10/10=1m=100px，打在底部感光板（改 m 看 R 变化）
   质谱仪: [
     { type: 'charge', x: 160, y: 380, props: { q: 1, m: 1, r: 10, v0x: 10, v0y: 0 } },
-    { type: 'uniformE', x: 340, y: 380, props: { w: 260, h: 220, ex: 0, ey: 10 } },
-    { type: 'uniformB', x: 340, y: 380, props: { w: 260, h: 220, bz: 1 } },
-    { type: 'uniformB', x: 660, y: 380, props: { w: 560, h: 620, bz: -0.5 } },
+    { type: 'uniformE', x: 340, y: 380, props: { w: 180, h: 220, ex: 0, ey: 6 } },
+    { type: 'uniformB', x: 340, y: 380, props: { w: 180, h: 220, bz: 1 } },
+    { type: 'uniformB', x: 780, y: 480, props: { w: 700, h: 900, bz: 10 } },
+    { type: 'screen', x: 430, y: 623, props: { len: 346, angle: 90 } },
   ],
   // 电子枪偏转：a = qU/(md) = 5*1.4/(0.5*1.4)…取 U=5V → a=10 m/s²，穿越 3m 用时 0.5s，侧移 1.25m 合理
   电子枪偏转: [
@@ -206,9 +207,9 @@ Object.assign(presets, {
     { type: 'plates', x: 480, y: 300, props: { len: 300, gap: 140, U: 5, angle: 0 } },
     { type: 'uniformB', x: 820, y: 160, props: { w: 300, h: 440, bz: -1.5 } },
   ],
-  // 磁流体发电机：平衡电压 U = v·B·d = 8×2×1.6 = 25.6V，从 0 充电趋近
+  // 磁流体发电机：U=vBd=8×2×1.6=25.6V 为理论开路电压；演示取 U=8V 观察电荷分飞与偏转
   磁流体发电机: [
-    { type: 'plates', x: 400, y: 300, props: { len: 320, gap: 160, U: 0, angle: 0 } },
+    { type: 'plates', x: 400, y: 300, props: { len: 320, gap: 160, U: 8, angle: 0 } },
     { type: 'uniformB', x: 400, y: 300, props: { w: 380, h: 280, bz: 2 } },
     { type: 'charge', x: 220, y: 300, props: { q: 1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
     { type: 'charge', x: 220, y: 340, props: { q: -1, m: 0.5, r: 10, v0x: 8, v0y: 0 } },
