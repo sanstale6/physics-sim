@@ -10,6 +10,15 @@ export function hitTest(objs, x, y, slop = 6) {
   return null
 }
 
+// 命中全部元件（放置顺序，后放的在末尾）
+export function hitTestAll(objs, x, y, slop = 6) {
+  const out = []
+  for (let i = 0; i < objs.length; i++) {
+    if (hitObject(objs[i], x, y, slop, objs)) out.push(objs[i])
+  }
+  return out
+}
+
 export function hitObject(o, x, y, slop = 6, objs = []) {
   const p = o.props || {}
   if (o.type === 'incline') {

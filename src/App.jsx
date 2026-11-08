@@ -10,7 +10,7 @@ import MomentumPanel from './components/MomentumPanel.jsx'
 import Help from './components/Help.jsx'
 import { useSim } from './hooks/useSim.js'
 import { presets } from './sim/presets.js'
-import { CIRCUIT_TYPES, placeCircuit, autoParallel } from './sim/circuit.js'
+import { CIRCUIT_TYPES, placeCircuit, findParallel } from './sim/circuit.js'
 import { registry } from './sim/registry.js'
 import { snapToIncline } from './sim/place.js'
 import { sceneFromHash } from './sim/share.js'
@@ -46,23 +46,23 @@ export default function App() {
   }, [])
 
   const place = useCallback((x, y) => {
-    let px = x, py = y, angle = 0, parLen = null
+    let px = x, py = y, angle = 0, parLen = null, extra = null
     const snap = snapToIncline(tool, x, y, sim.objsRef.current)
     if (snap) { px = snap.x; py = snap.y; angle = snap.angle }
     else if (CIRCUIT_TYPES.includes(tool)) {
       const d = registry[tool].defaults()
-      // 并联自动成形：与既有节点对正交搭接 → 平移对齐成并联
-      const par = autoParallel(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
+      // 并联对齐：附近存在「等长 + 平行 + 贴近」的一对连接点 → 对齐到该对并延展引线接上
+      const par = findParallel(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
       if (par) {
-        px = par.x; py = par.y; parLen = par.len
-        for (const w of par.wires ?? []) sim.add('wire', w.x, w.y, { len: w.len }, w.angle)
-      }
-      else {
+        px = par.cx; py = par.cy; parLen = par.len; angle = par.angle
+        extra = { _par: { a1: par.a1, a2: par.a2 } }
+      } else {
         const t = placeCircuit(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
         px = t.x; py = t.y
       }
     }
-    const id = sim.add(tool, px, py, parLen != null ? { len: parLen } : undefined, angle)
+    const props = (parLen != null || extra) ? { ...(parLen != null ? { len: parLen } : {}), ...(extra ?? {}) } : undefined
+    const id = sim.add(tool, px, py, props, angle)
     if (id != null) notify('已放置：' + (registry[tool]?.name ?? tool))
     setSelected(id); setShowInspector(true)
   }, [sim, tool])

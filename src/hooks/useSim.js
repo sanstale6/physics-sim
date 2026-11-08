@@ -54,9 +54,10 @@ export function useSim() {
     else if (def.type === 'circle') body = Matter.Bodies.circle(o.x, o.y, def.r, opts)
     else if (def.type === 'vertices') body = Matter.Bodies.fromVertices(o.x, o.y, [def.verts], opts)
     else if (def.type === 'compound') {
-      const parts = def.parts.map(p => p.type === 'rectangle'
-        ? Matter.Bodies.rectangle(o.x + p.x, o.y + p.y, p.w, p.h, p.options ?? opts)
-        : Matter.Bodies.circle(o.x + p.x, o.y + p.y, p.r, p.options ?? opts))
+      // 部件按「有 r 是圆、否则是矩形」判定（不依赖显式 type，避免漏写导致构造崩溃）
+      const parts = def.parts.map(p => (p.r != null
+        ? Matter.Bodies.circle(o.x + p.x, o.y + p.y, p.r, p.options ?? opts)
+        : Matter.Bodies.rectangle(o.x + p.x, o.y + p.y, p.w, p.h, p.options ?? opts)))
       body = Matter.Body.create({ parts, ...opts, isStatic: true })
     }
     if (body && o.props.m != null && !body.isStatic) Matter.Body.setMass(body, o.props.m)
@@ -75,6 +76,7 @@ export function useSim() {
     const reg = registry[type]
     if (!reg) return null
     const p = { ...reg.defaults(), ...props }
+    if (angle) p.angle = angle
     const obj = { id: nextId++, type, props: p, x, y, angle, body: null, home: { x, y, angle } }
     // 绳 / 弹簧 / 滑轮 / 单摆：放置时记住最近的两个动态物体作为两端
     if (LINK_TYPES.has(type) && p._a == null) {
@@ -161,6 +163,7 @@ export function useSim() {
     const now = Date.now()
     if (now - lastPropRef.current > 800) { pushHistory(); lastPropRef.current = now }
     const prevLen = o.props.len
+    if (o.props._par && (key === 'len' || key === 'angle')) delete o.props._par
     o.props[key] = value
     // 线段元件调长度：若某端已吸附到其他端子，则保持该端不动，沿另一端伸长
     if (key === 'len' && CIRCUIT_TYPES.includes(o.type)) {
@@ -232,6 +235,8 @@ export function useSim() {
   const dragTo = useCallback((id, x, y) => {
     const o = objsRef.current.find(o => o.id === id)
     if (!o) return
+    // 改动并联态元件（拖动/改尺寸）→ 视为解除并联，恢复普通形态
+    if (o.props._par) delete o.props._par
     // 电路线段元件：拖动时若附近（26px）有其他端子，则平移使该端子精确对齐（保持连接不断）
     if (o.type === 'junction') {
       const snap = snapJunction(x, y, objsRef.current.filter(t => t.id !== id))

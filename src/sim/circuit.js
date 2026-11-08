@@ -11,11 +11,19 @@ export function pins(o) {
   return [{ x: o.x - dx, y: o.y - dy }, { x: o.x + dx, y: o.y + dy }]
 }
 
+// 电气连接点：并联态（props._par）时是延展引线末端的 A1A2，否则就是自身端子
+export function connPins(o) {
+  const par = o.props?._par
+  if (par && par.a1 && par.a2) return [{ x: par.a1.x, y: par.a1.y }, { x: par.a2.x, y: par.a2.y }]
+  return pins(o)
+}
+
 export function resistance(o) {
   const p = o.props ?? o   // 兼容 Inspector 传入的扁平 {type,...props} 对象
   switch (o.type) {
     case 'wire': return 1e-3
     case 'junction': return 1e-3
+    case 'solenoid': return Math.max(0.1, p.R ?? 2)
     case 'ammeter': return 1e-2
     case 'voltmeter': return 1e6
     case 'switch': return p.closed ? 5e-3 : 1e12
@@ -26,10 +34,64 @@ export function resistance(o) {
   }
 }
 
+// ——— 并联对齐 ———
+// 给「待放置/待拖动」的元件 B 找一对既有连接点 A1A2：长度相近、角度平行、位置贴近。
+// 满足则元件对齐到 A1A2（端点自动接上），称为并联态。
+export function findParallel(x, y, len, angle, objs, opts = {}) {
+  const maxLenDiff = opts.maxLenDiff ?? Math.max(30, len * 0.4)
+  const maxAngDiff = opts.maxAngDiff ?? 14          // 度
+  const maxDist = opts.maxDist ?? 150               // 元件中心到 A1A2 线段的垂直距离
+  const maxEndOff = opts.maxEndOff ?? 0.45          // 元件中心偏离 A1A2 中点的比例上限
+
+  // 候选连接点：所有电路元件的端子 + 接点中心
+  const pts = []
+  for (const o of objs) {
+    if (!CIRCUIT_TYPES.includes(o.type)) continue
+    const ps = pins(o)
+    pts.push({ x: ps[0].x, y: ps[0].y, o }, { x: ps[1].x, y: ps[1].y, o })
+  }
+  let best = null, bestScore = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const A = pts[i], B = pts[j]
+      if (A.o === B.o && A.o.type !== 'junction') continue      // 同一元件的两端不算
+      const dx = B.x - A.x, dy = B.y - A.y
+      const d = Math.hypot(dx, dy)
+      if (d < 12) continue
+      const dLen = Math.abs(d - len)
+      if (dLen > maxLenDiff) continue
+      const angA = (Math.atan2(dy, dx) * 180) / Math.PI
+      let dAng = Math.abs(((angA - angle) % 180 + 180) % 180)   // 角差取 [0,180)
+      if (dAng > 90) dAng = 180 - dAng                          // π+θ 与 θ 等价
+      if (dAng > maxAngDiff) continue
+      const ux = dx / d, uy = dy / d
+      const rx = x - A.x, ry = y - A.y
+      const t = rx * ux + ry * uy                               // 沿 A1A2 的投影
+      const perp = Math.abs(rx * uy - ry * ux)                   // 垂直距离
+      if (perp > maxDist) continue
+      if (Math.abs(t - d / 2) > Math.max(maxEndOff * d, 60)) continue
+      const score = dLen + perp + Math.abs(t - d / 2) * 0.5
+      if (score < bestScore) {
+        // 中心沿轴归位到 A1A2 中点，保留垂直偏移 → 两条引线等长且垂直
+        const nx = -uy, ny = ux
+        const sgn = (rx * nx + ry * ny) >= 0 ? 1 : -1
+        bestScore = score
+        best = {
+          a1: { x: A.x, y: A.y }, a2: { x: B.x, y: B.y },
+          cx: A.x + ux * (d / 2) + nx * perp * sgn,
+          cy: A.y + uy * (d / 2) + ny * perp * sgn,
+          len: d, angle: angA, perp: perp * sgn
+        }
+      }
+    }
+  }
+  return best
+}
+
 // 端子聚类成节点（容差 tol 像素）
 function clusterNodes(els, tol = 12) {
   const pts = []
-  for (const e of els) { const ps = pins(e); ps.forEach((q, k) => pts.push({ x: q.x, y: q.y, id: e.id, side: k })) }
+  for (const e of els) { const ps = connPins(e); ps.forEach((q, k) => pts.push({ x: q.x, y: q.y, id: e.id, side: k })) }
   const parent = pts.map((_, i) => i)
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])))
   const unions = new Map()   // junction id → 其中心点索引
@@ -55,7 +117,7 @@ function clusterNodes(els, tol = 12) {
     const jx = pts[ji].x, jy = pts[ji].y
     for (const e of els) {
       if (e.id === pts[ji].id) continue
-      const ps = pins(e)
+      const ps = connPins(e)
       if (ps.length !== 2) continue
       const dx = ps[1].x - ps[0].x, dy = ps[1].y - ps[0].y
       const L2 = dx * dx + dy * dy
@@ -183,7 +245,7 @@ export function snapToPin(x, y, objs, maxDist = 26) {
 // （元件两端分别在两节点的外侧、且与节点连线大致垂直、距离不远），自动改为 U 形三段并联。
 // 返回 { x, y, angle } 或 null（不适用）。
 export function autoParallel(x, y, len, angle, objs, opts = {}) {
-  return null // 用户要求暂时关闭自动并联（m02132），后续按新方案重做
+  return null // 旧版启发式已废弃，改由 findParallel + 预览态实现
 
   const allowWires = !!opts.allowWires   // 只有 wire 允许自动生成引线
   const autoGrow = !!opts.autoGrow       // 只有 wire 允许自动加长

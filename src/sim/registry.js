@@ -823,8 +823,9 @@ function drawCircuit(ctx, c, all) {
   ctx.strokeStyle = '#c9d1d9'; ctx.lineWidth = 2 * LW; ctx.lineCap = 'round'
 
   const line = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke() }
-  // 引脚
-  line(-L, 0, -g, 0); line(g, 0, L, 0)
+  // 引脚（纯导线画整条线，中间不留缺口）
+  if (c.type === 'wire') line(-L, 0, L, 0)
+  else { line(-L, 0, -g, 0); line(g, 0, L, 0) }
   ctx.fillStyle = '#8b949e'
   for (const sx of [-L, L]) { ctx.beginPath(); ctx.arc(sx, 0, 3, 0, 7); ctx.fill() }
 
@@ -871,6 +872,21 @@ function drawCircuit(ctx, c, all) {
     default: break
   }
   ctx.restore()
+
+  // 并联态：元件端子到 A1A2 的延展引线（灰色、半透明）
+  const par = p._par
+  if (par?.a1 && par?.a2) {
+    const hx = (Math.cos(ang) * len) / 2, hy = (Math.sin(ang) * len) / 2
+    ctx.save()
+    ctx.strokeStyle = 'rgba(139,148,158,.9)'
+    ctx.lineWidth = 2 * LW
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(c.x - hx, c.y - hy); ctx.lineTo(par.a1.x, par.a1.y)
+    ctx.moveTo(c.x + hx, c.y + hy); ctx.lineTo(par.a2.x, par.a2.y)
+    ctx.stroke()
+    ctx.restore()
+  }
 
   // 电流方向箭头（沿元件轴线，正方向 a→b）
   if (Math.abs(I) > 1e-3) {

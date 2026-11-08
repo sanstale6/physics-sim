@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'react'
 import Matter from 'matter-js'
 import { registry, setLineScale } from '../sim/registry.js'
 import { traceRays } from '../sim/optics.js'
-import { hitTest } from '../sim/hit.js'
+import { hitTest, hitTestAll } from '../sim/hit.js'
 import { inclineGeom, inTriangle } from '../sim/incline.js'
-import { CIRCUIT_TYPES, pins } from '../sim/circuit.js'
+import { CIRCUIT_TYPES, pins, findParallel } from '../sim/circuit.js'
 import { fieldAt } from '../sim/magnetism.js'
 import { drawVectors, drawForceAnalysis } from './Vectors.jsx'
 
@@ -47,6 +47,7 @@ export default function SimCanvas(props) {
   const trailRef = useRef({})
   const hoverRef = useRef(null)
   const epochRef = useRef(props.epoch)
+  const cycleRef = useRef({ x: -1e9, y: -1e9, key: '', i: 0 })
 
   useEffect(() => {
     const cv = canvasRef.current
@@ -92,6 +93,20 @@ export default function SimCanvas(props) {
 
     const posOf = (o) => (o.body ? o.body.position : o)
 
+    // 重叠元件轮换选中：同一点连点按「后放在前」的顺序循环
+    let tapPt = null
+    const pickAt = (pt) => {
+      const objs = P.current.sim.objsRef.current
+      const hits = hitTestAll(objs, pt.x, pt.y, pt.slop)
+      if (!hits.length) { cycleRef.current = { x: -1e9, y: -1e9, key: '', i: 0 }; return null }
+      const order = hits.slice().reverse()          // 后放的在最上层，先选中
+      const key = order.map(o => o.id).join(',')
+      const c = cycleRef.current
+      if (Math.hypot(pt.x - c.x, pt.y - c.y) < 16 && c.key === key) c.i = (c.i + 1) % order.length
+      else { c.x = pt.x; c.y = pt.y; c.key = key; c.i = 0 }
+      return order[c.i]
+    }
+
     const onDown = (e) => {
       if (e.pointerType === 'mouse' && e.button > 0) return
       try { cv.setPointerCapture(e.pointerId) } catch { /* 忽略 */ }
@@ -109,6 +124,7 @@ export default function SimCanvas(props) {
       const w = worldOf(s)
       const o = hitTest(P.current.sim.objsRef.current, w.x, w.y, (e.pointerType === 'touch' ? 18 : 6) / view.scale)
       tapObj = o
+      tapPt = { x: w.x, y: w.y, slop: (e.pointerType === 'touch' ? 18 : 6) / view.scale }
       // 无限大场（全屏 uniformB/uniformE）不当作「抓住元件」：单指仍平移画布，轻点仍可选中
       const infiniteField = o && (o.type === 'uniformB' || o.type === 'uniformE')
         && ((o.props.w ?? 0) >= 3200 || (o.props.h ?? 0) >= 3200)
@@ -181,20 +197,24 @@ export default function SimCanvas(props) {
       const movedByPan = pan?.moved
       const movedByDrag = objDrag?.moved
 
+      const selectAt = () => {
+        const hit = tapPt ? pickAt(tapPt) : null
+        if (hit) P.current.onTap?.(hit.id)
+        else P.current.onSelectEmpty?.()
+      }
       if (mode === 'pan') {
         if (!movedByPan) {
           if (placing) {
             const w = worldOf(s)
             P.current.onPlace?.(snap(w.x), snap(w.y))
-          } else if (tapObj) P.current.onTap?.(tapObj.id)   // 全屏场轻点也能选中调参
-          else P.current.onSelectEmpty?.()
+          } else selectAt()          // 全屏场轻点也能选中调参
         }
       } else if (mode === 'press' || mode === 'drag') {
         if (!movedByDrag) {
           if (placing) {
             const w = worldOf(s)
             P.current.onPlace?.(snap(w.x), snap(w.y))
-          } else if (tapObj) P.current.onTap?.(tapObj.id)
+          } else selectAt()
         } else if (tapObj) {
           // 拖动结束：选中它，方便看参数
           P.current.onTap?.(tapObj.id)
@@ -338,7 +358,14 @@ export default function SimCanvas(props) {
       // 放置预览（鼠标悬停时）
       const tool = P.current.tool
       if (tool && tool !== 'select' && hoverRef.current && mode === 'idle') {
-        drawGhost(ctx, tool, snap(hoverRef.current.x), snap(hoverRef.current.y), view.scale)
+        const gx = snap(hoverRef.current.x), gy = snap(hoverRef.current.y)
+        let par = null
+        if (CIRCUIT_TYPES.includes(tool) && registry[tool]) {
+          const d = registry[tool].defaults()
+          par = findParallel(gx, gy, d.len ?? 90, d.angle ?? 0, P.current.sim.objsRef.current)
+        }
+        if (par) drawParallelGhost(ctx, tool, par, view.scale)
+        else drawGhost(ctx, tool, gx, gy, view.scale)
       }
     }
     // 单帧绘制出错不能让整个动画循环停掉（否则画布会「冻住」，看起来像卡死）
@@ -517,6 +544,39 @@ function drawIncline(ctx, o, selectedId, scale) {
   ctx.font = `${Math.round(12 / scale)}px system-ui`
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
   ctx.fillText('θ=' + (o.props.angle ?? 30) + '°', lx, ly)
+  ctx.restore()
+}
+
+// 并联预览：元件对齐到 A1A2（长度/角度一致），两条灰色引线连到 A1A2
+function drawParallelGhost(ctx, tool, par, scale) {
+  const a = (par.angle * Math.PI) / 180
+  const dx = (Math.cos(a) * par.len) / 2, dy = (Math.sin(a) * par.len) / 2
+  const c1 = { x: par.cx - dx, y: par.cy - dy }, c2 = { x: par.cx + dx, y: par.cy + dy }
+  ctx.save()
+  // 引线（灰、半透明，不占元件数）
+  ctx.strokeStyle = 'rgba(148,163,184,.55)'
+  ctx.lineWidth = 2 / scale
+  ctx.setLineDash([])
+  ctx.beginPath()
+  ctx.moveTo(c1.x, c1.y); ctx.lineTo(par.a1.x, par.a1.y)
+  ctx.moveTo(c2.x, c2.y); ctx.lineTo(par.a2.x, par.a2.y)
+  ctx.stroke()
+  // A1A2 接点提示
+  ctx.fillStyle = 'rgba(148,163,184,.8)'
+  for (const q of [par.a1, par.a2]) { ctx.beginPath(); ctx.arc(q.x, q.y, 4 / scale, 0, 7); ctx.fill() }
+  // 对齐后的元件本体
+  ctx.setLineDash([6 / scale, 4 / scale])
+  ctx.strokeStyle = 'rgba(56,189,248,.95)'
+  ctx.lineWidth = 2 / scale
+  ctx.beginPath(); ctx.moveTo(c1.x, c1.y); ctx.lineTo(c2.x, c2.y); ctx.stroke()
+  ctx.setLineDash([])
+  ctx.fillStyle = 'rgba(56,189,248,.9)'
+  for (const q of [c1, c2]) { ctx.beginPath(); ctx.arc(q.x, q.y, 3 / scale, 0, 7); ctx.fill() }
+  const name = registry[tool]?.name ?? tool
+  ctx.fillStyle = 'rgba(56,189,248,.95)'
+  ctx.font = `${11 / scale}px system-ui, sans-serif`
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
+  ctx.fillText(name + '（并联）', par.cx, par.cy - Math.abs(par.perp ?? 0) - 8 / scale)
   ctx.restore()
 }
 
