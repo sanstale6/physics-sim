@@ -52,7 +52,11 @@ export default function App() {
     else if (CIRCUIT_TYPES.includes(tool)) {
       const d = registry[tool].defaults()
       // 并联对齐：附近存在「等长 + 平行 + 贴近」的一对连接点 → 对齐到该对并延展引线接上
-      const par = findParallel(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
+      // 长度匹配用「按下的起点到落点距离」（拖动塑形语义）；鼠标直接点按没有意义距离，退回默认长度
+      const st = placeStartRef.current
+      const dragLen = (st && Math.hypot(x - st.x, y - st.y) > 12) ? Math.hypot(x - st.x, y - st.y) : 0
+      const par = (dragLen && findParallel(x, y, dragLen, d.angle ?? 0, sim.objsRef.current))
+        || findParallel(x, y, d.len ?? 90, d.angle ?? 0, sim.objsRef.current)
       if (par) {
         px = par.cx; py = par.cy; parLen = par.len; angle = par.angle
         extra = { _par: { a1: par.a1, a2: par.a2 } }
@@ -66,6 +70,9 @@ export default function App() {
     if (id != null) notify('已放置：' + (registry[tool]?.name ?? tool))
     setSelected(id); setShowInspector(true)
   }, [sim, tool])
+
+  // 触摸放置/拖动的起点（用于并联对齐的长度匹配）
+  const placeStartRef = useRef({ x: -1e9, y: -1e9 })
 
   const loadPreset = useCallback((name) => {
     sim.loadScene(presets[name])
@@ -131,6 +138,7 @@ export default function App() {
       <div className="main">
         <div className="canvas-wrap">
           <SimCanvas sim={sim} tool={tool} epoch={sim.epoch}
+            placeStartRef={placeStartRef}
             onPlace={place} onPick={pick} onTap={pick}
             onSelectEmpty={() => setShowInspector(false)}
             selectedId={selected} showForces={showForces} showB={showB} />

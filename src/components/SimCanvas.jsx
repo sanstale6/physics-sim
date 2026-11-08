@@ -124,6 +124,7 @@ export default function SimCanvas(props) {
       const w = worldOf(s)
       const o = hitTest(P.current.sim.objsRef.current, w.x, w.y, (e.pointerType === 'touch' ? 18 : 6) / view.scale)
       tapObj = o
+      if (P.current.placeStartRef) P.current.placeStartRef.current = { x: w.x, y: w.y }
       tapPt = { x: w.x, y: w.y, slop: (e.pointerType === 'touch' ? 18 : 6) / view.scale }
       // 无限大场（全屏 uniformB/uniformE）不当作「抓住元件」：单指仍平移画布，轻点仍可选中
       const infiniteField = o && (o.type === 'uniformB' || o.type === 'uniformE')
@@ -150,6 +151,7 @@ export default function SimCanvas(props) {
       }
       pointers.set(e.pointerId, s)
       hoverRef.current = worldOf(s)
+      if ((mode === 'press' || mode === 'drag') && objDrag?.px != null) hoverRef.current = { x: objDrag.px, y: objDrag.py }
 
       if (mode === 'pinch' && pointers.size >= 2) {
         const [a, b] = [...pointers.values()]
@@ -362,7 +364,9 @@ export default function SimCanvas(props) {
         let par = null
         if (CIRCUIT_TYPES.includes(tool) && registry[tool]) {
           const d = registry[tool].defaults()
-          par = findParallel(gx, gy, d.len ?? 90, d.angle ?? 0, P.current.sim.objsRef.current)
+          const slen = Math.hypot(gx - px, gy - py)
+          par = (slen > 12 && findParallel(gx, gy, slen, d.angle ?? 0, P.current.sim.objsRef.current))
+            || findParallel(gx, gy, d.len ?? 90, d.angle ?? 0, P.current.sim.objsRef.current)
         }
         if (par) drawParallelGhost(ctx, tool, par, view.scale)
         else drawGhost(ctx, tool, gx, gy, view.scale)
