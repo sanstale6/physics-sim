@@ -59,7 +59,9 @@ export function findParallel(x, y, len, angle, objs, opts = {}) {
       const d = Math.hypot(dx, dy)
       if (d < 12) continue
       const dLen = Math.abs(d - len)
-      if (dLen > maxLenDiff) continue
+      // 等长约束按「配对自身长度」放宽（0.6·d）：短元件跨接到长节点对上时自动拉伸对齐
+      const tolLen = Math.max(40, maxLenDiff, d * 0.6)
+      if (dLen > tolLen) continue
       const angA = (Math.atan2(dy, dx) * 180) / Math.PI
       let dAng = Math.abs(((angA - angle) % 180 + 180) % 180)   // 角差取 [0,180)
       if (dAng > 90) dAng = 180 - dAng                          // π+θ 与 θ 等价

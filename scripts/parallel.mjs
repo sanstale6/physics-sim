@@ -36,7 +36,7 @@ ok('角度不平行不触发', findParallel(951, 170, 250, 30, ring()) === null)
 // 4. 距离过远不触发
 ok('距离过远不触发', findParallel(951, 700, 250, 0, ring()) === null)
 // 5. 长度差过大不触发
-ok('长度差过大不触发', findParallel(951, 170, 120, 0, ring()) === null)
+ok('长度差过大不触发', findParallel(951, 170, 60, 0, ring()) === null)
 
 // 6. 并联态电气连接：connPins 返回 A1A2，且与电池并联的电阻分流
 {
