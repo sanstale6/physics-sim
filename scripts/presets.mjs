@@ -23,6 +23,10 @@ function makeBody(o) {
   } else if (def.type === 'circle') body = Matter.Bodies.circle(o.x, o.y, def.r, opts)
   else if (def.type === 'vertices') body = Matter.Bodies.fromVertices(o.x, o.y, [def.verts], opts)
   if (body && o.props.m != null && !body.isStatic) Matter.Body.setMass(body, o.props.m)
+  if (body && !body.isStatic) Matter.Body.setVelocity(body, {
+    x: (o.props.v0x ?? 0) / VEL_SCALE,
+    y: -(o.props.v0y ?? 0) / VEL_SCALE,
+  })
   return body
 }
 

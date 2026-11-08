@@ -144,6 +144,36 @@ export const registry = {
       ctx.beginPath(); ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2); ctx.fill()
     },
   },
+  cyclotron: {
+    name: '回旋加速器',
+    defaults: () => ({ R: 160, U: 5, B: 0.5 }),
+    fields: [
+      { key: 'R', label: 'D 形盒半径', unit: 'px', min: 80, max: 300, step: 10 },
+      { key: 'U', label: '加速电压 U', unit: 'V', min: 0.5, max: 20, step: 0.5 },
+      { key: 'B', label: '磁场 B（垂直盒面）', unit: 'T', min: 0.1, max: 5, step: 0.1 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => {
+      const R = c.props.R ?? 160, gap = 14, U = c.props.U ?? 5, B = c.props.B ?? 0.5
+      ctx.save()
+      // 两个 D 形盒（上下留缝）
+      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * (1 / (c._lw || 1))
+      ctx.lineWidth = 2; ctx.fillStyle = 'rgba(56,189,248,.08)'
+      ctx.beginPath(); ctx.arc(c.x, c.y - gap / 2, R, Math.PI, 0, false); ctx.lineTo(c.x + R, c.y - gap / 2); ctx.stroke()
+      ctx.beginPath(); ctx.arc(c.x, c.y - gap / 2, R, Math.PI, 0); ctx.fill()
+      ctx.beginPath(); ctx.arc(c.x, c.y + gap / 2, R, 0, Math.PI, false); ctx.lineTo(c.x - R, c.y + gap / 2); ctx.stroke()
+      ctx.beginPath(); ctx.arc(c.x, c.y + gap / 2, R, 0, Math.PI); ctx.fill()
+      // 中缝加速电场箭头
+      ctx.strokeStyle = '#ffd166'; ctx.fillStyle = '#ffd166'; ctx.lineWidth = 2
+      ctx.beginPath(); ctx.moveTo(c.x, c.y + gap / 2); ctx.lineTo(c.x, c.y - gap / 2); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(c.x - 6, c.y - gap / 2 + 8); ctx.lineTo(c.x, c.y - gap / 2); ctx.lineTo(c.x + 6, c.y - gap / 2 + 8); ctx.fill()
+      // 标注
+      ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#9fb3c8'
+      ctx.fillText('B = ' + B + 'T', c.x, c.y - R - 10)
+      ctx.fillText('U = ' + U + 'V', c.x + R + 6, c.y + 3)
+      ctx.restore()
+    },
+  },
   solenoid: {
     name: '通电螺线管',
     defaults: () => ({ len: 160, angle: 0, I: 2, n: 8, hel: 1, R: 2 }),

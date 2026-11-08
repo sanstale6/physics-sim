@@ -73,6 +73,40 @@ export function applyForces(components) {
   for (const c of charges) {
     const body = c.body
     const m = body.mass || 1
+    // —— 电场加速度收集（跳蛙法第一步 kick）：uniformE + 平行极板 ——
+    let eax = 0, eay = 0
+    for (const f of fields) {
+      if (f.type !== 'uniformE' || !inside(body, f)) continue
+      const p = f.props
+      const q = c.props.q * uC
+      // F = qE，物理 y 向上 → 屏幕 y 取反 → 屏幕加速度 (q·ex/m, −q·ey/m)
+      eax += (q * p.ex) / m
+      eay += (-q * p.ey) / m
+    }
+    for (const f of components) {
+      if (f.type !== 'plates') continue
+      const p = f.props
+      const qq = c.props.q * uC
+      const a = ((p.angle ?? 0) * Math.PI) / 180
+      const nx = -Math.sin(a), ny = Math.cos(a)   // 板法线（屏幕坐标）
+      const dx = body.position.x - f.x, dy = body.position.y - f.y
+      const sAlong = dx * Math.cos(a) + dy * Math.sin(a)
+      const sN = dx * nx + dy * ny
+      const halfL = (p.len ?? 200) / 2, halfG = (p.gap ?? 100) / 2
+      if (Math.abs(sAlong) > halfL || Math.abs(sN) > halfG) continue
+      const E = (p.U ?? 0) / ((p.gap ?? 100) / SCALE)   // N/C
+      // U>0 → 法线正侧板为正 → 场指向负板（−n）
+      eax += (-qq * E * nx) / m
+      eay += (qq * E * ny) / m
+    }
+    if (eax || eay) {
+      const hdt = (1 / 60) / 2
+      Matter.Body.setVelocity(body, {
+        x: body.velocity.x + (eax / VEL_SCALE) * hdt,
+        y: body.velocity.y + (eay / VEL_SCALE) * hdt,
+      })
+      body._eKick = { ax: eax, ay: eay }
+    }
     let vx = body.velocity.x * VEL_SCALE    // m/s，屏幕 x
     let vy = body.velocity.y * VEL_SCALE    // m/s，屏幕 y（向下为正）
     let rotated = false
@@ -107,40 +141,48 @@ export function applyForces(components) {
         Matter.Body.setPosition(body, { x: body.position.x + dx / dl * push, y: body.position.y + dy / dl * push }, false)
       }
     }
+    // 电场第二次半步 kick（跳蛙法收尾；第一步 kick 在本轮 charges 循环前段已做）
+    if (body._eKick) {
+      const { ax, ay } = body._eKick
+      delete body._eKick
+      Matter.Body.setVelocity(body, {
+        x: body.velocity.x + (ax / VEL_SCALE) * (1 / 120),
+        y: body.velocity.y + (ay / VEL_SCALE) * (1 / 120),
+      })
+    }
+    // 回旋加速器：圆形区域按 ω=qB/m 精确旋转；水平中缝内（|dy|<gap/2）受电场沿 x 加速
+    // （简化教学模型：缝内电场方向按粒子来向翻转，模拟高频电源反向，保证每次穿缝都被加速）
+    for (const cy of components) {
+      if (cy.type !== 'cyclotron') continue
+      const R = cy.props.R ?? 160, gap = 14, B = cy.props.B ?? 0.5, U = cy.props.U ?? 5
+      const dx = body.position.x - cy.x, dy = body.position.y - cy.y
+      if (Math.abs(dx) >= R || Math.abs(dy) >= R + gap) continue
+      const q = c.props.q * uC
+      // 整个圆形区域有磁场 → 精确旋转
+      const w = (q * B) / m, phi = w / 60
+      const vxs = body.velocity.x * VEL_SCALE, vys = body.velocity.y * VEL_SCALE
+      const cs = Math.cos(phi), sn = Math.sin(phi)
+      Matter.Body.setVelocity(body, {
+        x: (vxs * cs - vys * sn) / VEL_SCALE,
+        y: (vxs * sn + vys * cs) / VEL_SCALE,
+      })
+      // 缝内：电场加速沿当前水平速度方向（保证每圈两次加速，演示「半径增大」）
+      if (Math.abs(dy) < gap / 2 && Math.abs(dx) < R) {
+        const vxs2 = body.velocity.x, vys2 = body.velocity.y
+        if (Math.abs(vxs2) > Math.abs(vys2) * 0.6) {   // 以水平穿越缝为主时加速，减小圆心漂移
+          const dvx = ((q * U / 2) / m) * (1 / 60) * 2   // U/2 每盒，缝内 dt=1/60，×2 补偿短驻留
+          const sgn = Math.sign(vxs2 || 1e-9)
+          Matter.Body.setVelocity(body, {
+            x: vxs2 + (sgn * dvx) / VEL_SCALE,
+            y: vys2,
+          })
+        }
+      }
+    }
     // 点电荷不计重力（高中题设定）；带电物块/小球正常受重力
     if (c.type === 'charge') {
       const gw = gravityState.on ? body.mass * GRAV.y * GRAV.scale : 0
       if (gw) Matter.Body.applyForce(body, body.position, { x: 0, y: -gw })
-    }
-    for (const f of fields) {
-      if (f.type !== 'uniformE' || !inside(body, f)) continue
-      const p = f.props
-      const q = c.props.q * uC
-      // F = qE，物理 y 向上 → 屏幕 y 取反
-      Matter.Body.applyForce(body, body.position, {
-        x: q * p.ex * FORCE_SCALE,
-        y: -q * p.ey * FORCE_SCALE,
-      })
-    }
-    // 平行极板：板间匀强电场 E = U/d（d 单位换算 m）
-    for (const f of components) {
-      if (f.type !== 'plates') continue
-      const p = f.props
-      const qq = c.props.q * uC
-      const a = ((p.angle ?? 0) * Math.PI) / 180
-      const nx = -Math.sin(a), ny = Math.cos(a)   // 板法线（屏幕坐标）
-      // 粒子相对板中心，沿轴/法线分解，判定在板间区域
-      const dx = body.position.x - f.x, dy = body.position.y - f.y
-      const sAlong = dx * Math.cos(a) + dy * Math.sin(a)
-      const sN = dx * nx + dy * ny
-      const halfL = (p.len ?? 200) / 2, halfG = (p.gap ?? 100) / 2
-      if (Math.abs(sAlong) > halfL || Math.abs(sN) > halfG) continue
-      const E = (p.U ?? 0) / ((p.gap ?? 100) / SCALE)   // N/C
-      // U>0 → 法线正侧板为正 → 场指向负板（−n）
-      Matter.Body.applyForce(body, body.position, {
-        x: -qq * E * nx * FORCE_SCALE,
-        y: qq * E * ny * FORCE_SCALE,
-      })
     }
   }  // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
   for (const mg of components) {
