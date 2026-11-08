@@ -193,7 +193,7 @@ Object.assign(presets, {
     { type: 'uniformE', x: 400, y: 300, props: { w: 440, h: 300, ex: 0, ey: 20 } },
     { type: 'uniformB', x: 400, y: 300, props: { w: 440, h: 300, bz: 2 } },
   ],
-  // 质谱仪：选择器 E/B=10 直进，偏转区 B'=-1 → R = mv/(qB') = 10px…改 m=2 看 R=mv/(qB')
+  // 质谱仪：选择器 E/B=10 直进，偏转区 B’=-1 → R = mv/(qB’) = 10px…改 m=2 看 R=mv/(qB’)
   质谱仪: [
     { type: 'charge', x: 160, y: 380, props: { q: 1, m: 1, r: 10, v0x: 10, v0y: 0 } },
     { type: 'uniformE', x: 340, y: 380, props: { w: 260, h: 220, ex: 0, ey: 10 } },
@@ -217,17 +217,17 @@ Object.assign(presets, {
     { type: 'cyclotron', x: 480, y: 300, props: { R: 170, U: 2, B: 2 } },
     { type: 'charge', x: 480, y: 300, props: { q: 1, m: 0.5, r: 8, v0x: 2, v0y: 0 } },
   ],
-  // 电压表外接：V 直接并在 R 两端（A 在干路）。I = 6/20.5 ≈ 0.2927A，V 读数 = U_R（偏小方向）
+  // 电压表外接：V 直接并在 R 两端（A 在干路）。I = 6/20.5 ≈ 0.293A，V 读数 = U_R（偏小方向）
   电压表外接: [
     { type: 'battery', x: 400, y: 300, props: { E: 6, r: 0.5, len: 120, angle: 90 } },
     { type: 'ammeter', x: 400, y: 420, props: { len: 120, angle: 90 } },
     { type: 'resistor', x: 400, y: 540, props: { R: 20, len: 120, angle: 90 } },
     { type: 'voltmeter', x: 560, y: 540, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 400, y: 360, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 400, y: 480, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 400, y: 200, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 480, y: 460, props: { len: 160, angle: 180 } },
-    { type: 'wire', x: 480, y: 600, props: { len: 160, angle: 180 } },
+    { type: 'wire', x: 530, y: 600, props: { len: 260, angle: 0 } },
+    { type: 'wire', x: 660, y: 420, props: { len: 360, angle: 270 } },
+    { type: 'wire', x: 530, y: 240, props: { len: 260, angle: 180 } },
+    { type: 'wire', x: 480, y: 480, props: { len: 160, angle: 0 } },
+    { type: 'wire', x: 480, y: 600, props: { len: 160, angle: 0 } },
   ],
   // 电压表内接：V 跨在「A+R」两端，读数含 A 分压（偏大方向）。对比外接看误差方向
   电压表内接: [
@@ -235,13 +235,13 @@ Object.assign(presets, {
     { type: 'ammeter', x: 400, y: 420, props: { len: 120, angle: 90 } },
     { type: 'resistor', x: 400, y: 540, props: { R: 20, len: 120, angle: 90 } },
     { type: 'voltmeter', x: 560, y: 480, props: { len: 240, angle: 90 } },
-    { type: 'wire', x: 400, y: 360, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 400, y: 480, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 400, y: 200, props: { len: 120, angle: 90 } },
-    { type: 'wire', x: 480, y: 360, props: { len: 160, angle: 180 } },
-    { type: 'wire', x: 480, y: 600, props: { len: 160, angle: 180 } },
+    { type: 'wire', x: 530, y: 600, props: { len: 260, angle: 0 } },
+    { type: 'wire', x: 660, y: 420, props: { len: 360, angle: 270 } },
+    { type: 'wire', x: 530, y: 240, props: { len: 260, angle: 180 } },
+    { type: 'wire', x: 480, y: 360, props: { len: 160, angle: 0 } },
+    { type: 'wire', x: 480, y: 600, props: { len: 160, angle: 0 } },
   ],
-  // 惠斯通电桥：R1=R2=R3=R4=20 平衡 → 桥（灯泡 G）无电流；把 R4 改 40 看失衡偏转
+  // 惠斯通电桥：R1=R2=R3=R4=20 平衡 → 桥（灯泡 G）无电流；R4=40 失衡看偏转
   惠斯通电桥: [
     { type: 'battery', x: 250, y: 400, props: { E: 6, r: 0.5, len: 280, angle: 90 } },
     { type: 'resistor', x: 430, y: 330, props: { R: 20, len: 140, angle: 90 } },
@@ -261,8 +261,8 @@ Object.assign(presets, {
     { type: 'resistor', x: 430, y: 470, props: { R: 10, len: 140, angle: 90 } },
     { type: 'resistor', x: 560, y: 470, props: { R: 10, len: 140, angle: 90 } },
     { type: 'wire', x: 340, y: 260, props: { len: 180, angle: 0 } },
-    { type: 'wire', x: 495, y: 400, props: { len: 130, angle: 0 } },
-    { type: 'wire', x: 495, y: 540, props: { len: 130, angle: 0 } },
     { type: 'wire', x: 340, y: 540, props: { len: 180, angle: 0 } },
+    { type: 'wire', x: 495, y: 400, props: { len: 130, angle: 0 } },
+    { type: 'wire', x: 495, y: 540, props: { len: 130, angle: 180 } },
   ],
 })

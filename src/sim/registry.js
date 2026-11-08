@@ -1,6 +1,7 @@
 import Matter from 'matter-js'
 import { solve } from './circuit.js'
 import { fieldAt } from './magnetism.js'
+import { capacitance } from './engine.js'
 
 // 叠加层线宽随相机缩放：SimCanvas 每帧调用 setLineScale(view.scale)
 export let LW = 1
@@ -824,7 +825,12 @@ export const registry = {
         }
       }
       ctx.fillStyle = '#dbe6f5'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'
-      ctx.fillText('U = ' + (p.U ?? 0) + 'V  d = ' + ((p.gap ?? 100) / 100).toFixed(2) + 'm', c.x - uy * (hg + 26), c.y + ux * (hg + 26))
+      ctx.fillText('U = ' + Math.round(p.U ?? 0) + 'V  d = ' + ((p.gap ?? 100) / 100).toFixed(2) + 'm', c.x - uy * (hg + 26), c.y + ux * (hg + 26))
+      // 电容模型：显示两板累积电荷（_Q 由 engine 附着逻辑写入）
+      if (p._Q) {
+        ctx.font = '11px system-ui'; ctx.fillStyle = '#38bdf8'
+        ctx.fillText('Q=' + p._Q.toFixed(1) + '  C=' + capacitance(p).toFixed(2) + 'F', c.x - uy * (hg + 44), c.y + ux * (hg + 44))
+      }
       ctx.restore()
     },
   },

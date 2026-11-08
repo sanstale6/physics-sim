@@ -14,6 +14,16 @@ export const GRAV = { y: G / 10, scale: 0.001 }
 // 重力开关（失重演示用）；关掉时带电体也不必再抵消重力
 export const gravityState = { on: true }
 
+// —— 平行板电容（教学缩放）——
+// 真实 C = ε0·S/d 极小（pF 级），单电荷附着后 U 巨大。教学模型：
+// C 正比于板长×间距（几何），单电荷 q=1 附着后 U 约 2V 量级，多个电荷线性累积
+export const CAP_U_SCALE = 2
+export function capacitance(p) {
+  const L = (p.len ?? 200) / SCALE   // m
+  const d = (p.gap ?? 100) / SCALE   // m
+  return Math.max(L * d, 0.05)       // F（缩放后），避免除零
+}
+
 export function createWorld() {
   const e = Matter.Engine.create()
   e.gravity.y = GRAV.y            // 0.98 × scale 0.001 → a = 9.8 px 换算法下正好 9.8 m/s²
@@ -60,8 +70,7 @@ export function applyForces(components) {
     }
 
   // 场区域内的电荷
-  // 磁场：洛伦兹力只改变速度方向。若用「每步加力」的半隐式欧拉，
-  // 圆运动会一步步变大（能量漂移），所以直接按 ω = qB/m 精确旋转速度矢量。
+  // 磁场：洛伦兹力只改变速度方向。若用「每步加力」的半隐式欧拉，  // 圆运动会一步步变大（能量漂移），所以直接按 ω = qB/m 精确旋转速度矢量。
   // 电场：F = qE，仍按力施加。
   const inside = (body, f) => {
     // 「无限大」场（宽或高 ≥3200）：物理上按 9600×7200 巨区处理，覆盖整个可视世界
@@ -93,6 +102,21 @@ export function applyForces(components) {
       const sAlong = dx * Math.cos(a) + dy * Math.sin(a)
       const sN = dx * nx + dy * ny
       const halfL = (p.len ?? 200) / 2, halfG = (p.gap ?? 100) / 2
+      // —— 电容模型：电荷碰到板面（法向距 ≤14px、在板长内）→ 附着并给板充电 ——
+      if (!body._attached && Math.abs(sAlong) <= halfL && Math.abs(Math.abs(sN) - halfG) <= 14) {
+        const side = sN > 0 ? 1 : -1               // +1 碰法线正侧板，-1 碰负侧板
+        p._Q = (p._Q ?? 0) + side * qq             // 正侧板积累 +Q，负侧板 −Q
+        p.U = (p._Q ?? 0) / capacitance(p) * CAP_U_SCALE   // U = Q/C 缩放到可视量级
+        body._attached = f.id
+        Matter.Body.setVelocity(body, { x: 0, y: 0 })
+        Matter.Body.setPosition(body, {
+          x: f.x + Math.cos(a) * sAlong + nx * (side * (halfG - 6)),
+          y: f.y + Math.sin(a) * sAlong + ny * (side * (halfG - 6)),
+        })
+        Matter.Body.setStatic(body, true)   // 附着后钉在板上，不再参与运动
+        continue
+      }
+      if (body._attached === f.id) continue        // 已附着：不再受力
       if (Math.abs(sAlong) > halfL || Math.abs(sN) > halfG) continue
       const E = (p.U ?? 0) / ((p.gap ?? 100) / SCALE)   // N/C
       // U>0 → 法线正侧板为正 → 场指向负板（−n）

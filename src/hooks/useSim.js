@@ -353,7 +353,13 @@ export function useSim() {
             const px = g.x + Math.cos(a) * 26, py = g.y + Math.sin(a) * 26
             const vpx = Math.cos(a) * (g.props.v ?? 5) / VEL_SCALE, vpy = Math.sin(a) * (g.props.v ?? 5) / VEL_SCALE
             const born = sp('charge', px, py, { q: g.props.q ?? -1, m: g.props.m ?? 0.5, r: 8, v0x: 0, v0y: 0 })
-            if (born?.body) { Matter.Body.setVelocity(born.body, { x: vpx, y: vpy }) }
+            if (born?.body) {
+              Matter.Body.setVelocity(born.body, { x: vpx, y: vpy })
+              // spawn 只建 matter 体不进 objsRef（那是 add 的职责）；枪发射的粒子
+              // 必须入列表才会被渲染/受力，否则用户完全看不到「射出」
+              objsRef.current = [...objsRef.current, born]
+              setCount(objsRef.current.length)
+            }
           }
         }
       }
