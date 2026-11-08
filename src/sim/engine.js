@@ -166,15 +166,15 @@ export function applyForces(components) {
         x: (vxs * cs - vys * sn) / VEL_SCALE,
         y: (vxs * sn + vys * cs) / VEL_SCALE,
       })
-      // 缝内：电场加速沿当前水平速度方向（保证每圈两次加速，演示「半径增大」）
+      // 缝内：加速电场与回旋同步交变，粒子每次穿缝都沿当前速度方向被加速（能量每穿一次 +qU）
       if (Math.abs(dy) < gap / 2 && Math.abs(dx) < R) {
-        const vxs2 = body.velocity.x, vys2 = body.velocity.y
-        if (Math.abs(vxs2) > Math.abs(vys2) * 0.6) {   // 以水平穿越缝为主时加速，减小圆心漂移
-          const dvx = ((q * U / 2) / m) * (1 / 60) * 2   // U/2 每盒，缝内 dt=1/60，×2 补偿短驻留
-          const sgn = Math.sign(vxs2 || 1e-9)
+        const vxs2 = body.velocity.x * VEL_SCALE, vys2 = body.velocity.y * VEL_SCALE
+        const sp2 = Math.hypot(vxs2, vys2)
+        if (sp2 > 1e-6) {
+          const dv = ((q * U / 2) / m) * (1 / 60) * 2   // U/2 每盒，缝内 dt=1/60，×2 补偿短驻留
           Matter.Body.setVelocity(body, {
-            x: vxs2 + (sgn * dvx) / VEL_SCALE,
-            y: vys2,
+            x: body.velocity.x + (vxs2 / sp2 * dv) / VEL_SCALE,
+            y: body.velocity.y + (vys2 / sp2 * dv) / VEL_SCALE,
           })
         }
       }

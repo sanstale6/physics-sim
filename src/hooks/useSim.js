@@ -344,7 +344,7 @@ export function useSim() {
         if (sp) for (const g of objsRef.current) {
           if (g.type !== 'electronGun') continue
           const rate = g.props.rate ?? 2
-          g._t = (g._t ?? rate) + gunAcc
+          g._t = (g._t ?? 0) + gunAcc
           if (g._t >= rate) {
             g._t -= rate
             const a = ((g.props.angle ?? 0) * Math.PI) / 180
