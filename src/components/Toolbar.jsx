@@ -2,6 +2,7 @@ export default function Toolbar({
   running, onPlay, onPause, onReset, onClear, showForces, onToggleForces,
   onUndo, onRedo, canUndo, canRedo, onHelp, gravity, onToggleGravity,
   speed, onSpeed, tool, onToolSelect, showB, onToggleB,
+  coulomb, onToggleCoulomb,
 }) {
   return (
     <div className="toolbar">
@@ -24,6 +25,10 @@ export default function Toolbar({
       <button className={showForces ? 'active' : ''} onClick={onToggleForces} title="显示受力分析">受力</button>
       <button className={showB ? 'active' : ''} onClick={onToggleB} title="显示磁感线">磁感线</button>
       <button className={gravity ? '' : 'active'} onClick={onToggleGravity} title="重力开关（失重演示）">{gravity ? 'g 重力' : '失重'}</button>
+      <button className={coulomb ? '' : 'active'} onClick={onToggleCoulomb}
+        title="电荷相互作用开关：关掉后电荷之间不再有库仑力，只受外加电场/磁场作用（演示粒子偏转时避免同批电荷互相干扰）">
+        {coulomb ? '电荷力' : '忽略电荷力'}
+      </button>
       <button onClick={onReset} title="物体回到初始位置">⟲ 重置</button>
       <button onClick={onHelp} title="操作说明" aria-label="操作说明">❓</button>
       <button className="danger" onClick={onClear}>清空</button>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Matter from 'matter-js'
-import { createWorld, applyForces, postStep, VEL_SCALE, GRAV, gravityState } from '../sim/engine.js'
+import { createWorld, applyForces, postStep, VEL_SCALE, GRAV, gravityState, coulombState } from '../sim/engine.js'
 import { registry } from '../sim/registry.js'
 import { snapToPin, snapJunction, CIRCUIT_TYPES, pins } from '../sim/circuit.js'
 
@@ -23,6 +23,7 @@ export function useSim() {
   const [tick, setTick] = useState(0)
   const [epoch, setEpoch] = useState(0)   // 场景重置计数（画布据此清轨迹）
   const [gravity, setGravityState] = useState(true)
+  const [coulomb, setCoulombState] = useState(true)
   const [speed, setSpeedState] = useState(1)   // 时间倍率 0.25 / 0.5 / 1 / 2 / 4
   const speedRef = useRef(1)
   const historyRef = useRef([])           // 撤销栈（快照）
@@ -32,6 +33,12 @@ export function useSim() {
   const ensureWorld = () => (engineRef.current ||= createWorld())
 
   const setSpeed = useCallback((v) => { speedRef.current = v; setSpeedState(v) }, [])
+
+  // 电荷相互作用（库仑力）开关：关掉后同批电荷不再互相吸引/排斥
+  const setCoulomb = useCallback((on) => {
+    coulombState.on = on
+    setCoulombState(on)
+  }, [])
 
   const setGravity = useCallback((on) => {
     gravityState.on = on
@@ -322,7 +329,7 @@ export function useSim() {
 
   useEffect(() => {
     ensureWorld()
-    let raf, last = performance.now(), acc = 0, lastPub = 0, gunAcc = 0
+    let raf, last = performance.now(), acc = 0, lastPub = 0
     const loop = (now) => {
       const dt = Math.min(0.1, (now - last) / 1000)
       last = now
@@ -355,7 +362,9 @@ export function useSim() {
           if (now - lastPub > 120) { lastPub = now; setTime(timeRef.current); bump() }
         }
         // 电子枪：按 rate 周期发射粒子（沿枪口方向，速度 v）
-        gunAcc += n * STEP_MS / 1000
+        // 注意 gunAcc 必须是「本帧经过的物理时间」，曾经把它累加在循环外，
+        // 变成总运行时长 → 每帧都满足 _t >= rate，间隔设置形同虚设
+        const gunAcc = (n * STEP_MS) / 1000
         const sp = spawnRef.current
         if (sp) for (const g of objsRef.current) {
           if (g.type !== 'electronGun') continue
@@ -389,6 +398,6 @@ export function useSim() {
     canRedo: futureRef.current.length > 0,
     histVer,
     running, setRunning, time, timeRef, count, tick, epoch, engineRef, objsRef,
-    gravity, setGravity, speed, setSpeed,
+    gravity, setGravity, coulomb, setCoulomb, speed, setSpeed,
   }
 }

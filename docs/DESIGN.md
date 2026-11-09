@@ -192,3 +192,10 @@ Inspector 据此生成滑条/数字框，避免硬编码。
 
 ### 16.3 交流电源
 - battery props `ac/freq`；useSim 每物理步写 `_eInst = E·sin(2πft)`，切回直流时删除 `_eInst`；solve 缓存 key 含 `_eInst`，面板/灯泡随相位闪烁
+
+## 17. 第 17 轮：交互与演示修正
+- 回旋加速器改为极坐标驱动：圆心恒在加速器中心，θ += ω/60（ω=qB/m），跨过 0/π 时按动能定理提 v 并重算 r=mv/(qB)；r≥R 时置 `_cycOut` 放归常规物理直线飞出。好处是轨迹是教科书上的同心半圆，参数量（R/U/B/q/m/v0）都有明确物理含义
+- solve 缓存 key 必须覆盖一切影响方程的 props：battery `_eInst/E/r`、metalRod `_eInst/R`、**plates `U`**、switch `closed`、其余 `R`
+- 有 overlay 自定义外观且有 matter 刚体的元件（magnet/metalRod/conveyor/pulley）不要再用 drawBody 画一遍
+- 电子枪发射计时用「本帧经过的物理时间」，不要用外层累加变量
+- 电荷相互作用开关 `coulombState.on` 只关库仑力对（电荷间的成对力），不影响外加场

@@ -198,7 +198,10 @@ export function solve(objs) {
   const els = objs.filter((o) => CIRCUIT_TYPES.includes(o.type))
   if (!els.length) return null
   const key = els.map((e) => e.id + ':' + e.x.toFixed(1) + ',' + e.y.toFixed(1) + ':' + (e.props.angle ?? 0) + ':' +
-    (e.type === 'battery' ? (e.props._eInst ?? e.props.E) + '/' + e.props.r : e.type === 'metalRod' ? (e.props._eInst ?? 0).toFixed(4) + '/' + (e.props.R ?? 2) : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
+    (e.type === 'battery' ? (e.props._eInst ?? e.props.E) + '/' + e.props.r
+      : e.type === 'metalRod' ? (e.props._eInst ?? 0).toFixed(4) + '/' + (e.props.R ?? 2)
+        : e.type === 'plates' ? 'U' + (e.props.U ?? 0)   // 极板电压会随附着电荷变化，必须进 key（否则灯泡功率不变）
+          : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
   if (key === lastKey) return lastResult
 
   const { pts, nodeOf, count } = clusterNodes(els)

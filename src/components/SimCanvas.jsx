@@ -325,7 +325,9 @@ export default function SimCanvas(props) {
         if ((o.type === 'magnet' || o.type === 'solenoid') && P.current.showB) drawFieldLines(ctx, o, view.scale, objs)
         if (o.type === 'incline') drawIncline(ctx, o, P.current.selectedId, view.scale)
         else if (o.body) {
-          if (o.type !== 'pulley') drawBody(ctx, o, P.current.selectedId, view.scale)
+          // 这些元件自己的 overlay 已经把外观画全了（磁铁极性、铜棒、滑轮），
+          // 再画一遍 matter 刚体就会出现「两个矩形」，旋转时尤其明显
+          if (!SKIP_BODY_DRAW.has(o.type)) drawBody(ctx, o, P.current.selectedId, view.scale)
           registry[o.type]?.overlay?.(ctx, o, objs)   // pulley 有 body 也画自定义轮体外观
         }
         else registry[o.type]?.overlay?.(ctx, o, objs)
@@ -608,6 +610,8 @@ function drawGhost(ctx, tool, x, y, scale) {
   ctx.fill(); ctx.stroke()
   ctx.restore()
 }
+
+const SKIP_BODY_DRAW = new Set(['pulley', 'magnet', 'metalRod', 'conveyor'])
 
 function drawBody(ctx, o, selectedId, scale) {
   const b = o.body

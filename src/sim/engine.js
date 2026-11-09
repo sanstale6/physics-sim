@@ -14,6 +14,9 @@ export const VEL_SCALE = 0.6      // matter 速度 px/step → m/s
 export const GRAV = { y: G / 10, scale: 0.001 }
 // 重力开关（失重演示用）；关掉时带电体也不必再抵消重力
 export const gravityState = { on: true }
+// 电荷相互作用开关：关掉后只算外加场（匀强电场/磁场/极板）对电荷的作用，
+// 用来演示「粒子在电场中偏转」时不希望同批电荷互相排斥干扰
+export const coulombState = { on: true }
 
 // —— 平行板电容（教学缩放）——
 // 真实 C = ε0·S/d 极小（pF 级），单电荷附着后 U 巨大。教学模型：
@@ -57,7 +60,7 @@ export function applyForces(components) {
   // 教学单位：电荷量 q 无物理单位（面板里写 μC 只是符号），库仑常量取 1，
   // 使 q=1 相距 1m 时约 1N —— 真实 9e9 会让 1μC 的力大到看不到运动
   const K = 1, uC = 1
-  for (let i = 0; i < charges.length; i++)
+  if (coulombState.on) for (let i = 0; i < charges.length; i++)
     for (let j = i + 1; j < charges.length; j++) {
       const a = charges[i].body, b = charges[j].body
       const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y
@@ -202,49 +205,55 @@ export function applyForces(components) {
         break
       }
     }
-    // 回旋加速器（离散事件模型）：
-    //  - D 形盒内：速率不变，按 ω=qB/m 精确旋转（半径 r=mv/(qB) 随 v 增大向外螺旋）
-    //  - 穿缝（上一帧与这一帧 dy 异号且 |dx|<R）：一次完整加速 +qU（交变电场保证每次都加速）
-    //  - 出盒：r = mv/(qB) ≥ R 时把粒子移出磁场区外（沿径向直线飞出），停止加速
+    // 回旋加速器（极坐标驱动，教科书图景）：
+    //  - 粒子在 D 形盒内做半径 r 的圆周运动，角速度 ω=qB/m（速率不变）
+    //  - 每穿过一次水平缝隙（极角跨过 0 或 π）动能增加 qU → v'=√(v²+2qU/m)、r'=v'/ω
+    //  - 圆心始终是加速器中心（真实机器圆心会缓慢漂移，教学图里要的是同心半圆）
+    //  - r ≥ R 时离开磁场，沿当前速度直线飞出
     for (const cy of components) {
       if (cy.type !== 'cyclotron') continue
-      const R = cy.props.R ?? 160, gap = 14, B = cy.props.B ?? 0.5, U = cy.props.U ?? 5
-      const cx0 = cy.x, cy0 = cy.y
-      const dx = body.position.x - cx0, dy = body.position.y - cy0
+      const R = cy.props.R ?? 160, B = cy.props.B ?? 0.5, U = cy.props.U ?? 5
       const q = c.props.q * uC
-      const v = Math.hypot(body.velocity.x, body.velocity.y) * VEL_SCALE   // m/s
-      // 出盒判定：回旋半径 r=mv/(qB) ≥ R → 不再旋转，沿当前方向直线飞出磁场区
-      const rNow = (m * v) / Math.max(q * B, 1e-6) * SCALE   // px
-      if (rNow >= R && v > 0) {
-        body._cycOut = cy.id   // 标记已出盒：跳过盒内旋转与加速
-        continue
+      const wAbs = Math.abs((q * B) / m)          // rad/s
+      if (wAbs < 1e-9) continue
+      let st = body._cyc
+      const dx0 = body.position.x - cy.x, dy0 = body.position.y - cy.y
+      if (!st || st.id !== cy.id) {
+        if (Math.hypot(dx0, dy0) > R + 20) continue
+        const v0 = Math.hypot(body.velocity.x, body.velocity.y) * VEL_SCALE
+        // 半径由速度定；速度过小就从盒中心附近起步，相位取速度方向
+        let r0 = (m * v0) / (Math.abs(q) * B) * SCALE
+        if (r0 < 1) r0 = 0
+        st = body._cyc = { id: cy.id, th: r0 > 1 ? Math.atan2(dy0, dx0) : Math.atan2(body.velocity.y, body.velocity.x), r: r0, v: v0, cross: 0 }
       }
       if (body._cycOut === cy.id) continue
-      // 穿缝检测：dy 符号翻转（_dySgn 记录上一次 dy≠0 的符号），且 |dx| < R
-      const sgn = Math.sign(dy)
-      const prevSgn = cy._dySgn ?? sgn
-      if (Math.abs(dx) < R && sgn !== 0 && sgn !== prevSgn) {
-        // 一次完整加速：沿当前速度方向加 Δv = qU/m
-        const dv = (q * U) / m
-        if (v > 1e-6) {
-          Matter.Body.setVelocity(body, {
-            x: body.velocity.x * (1 + dv / v),
-            y: body.velocity.y * (1 + dv / v),
-          })
-        }
-        cy._crossings = (cy._crossings ?? 0) + 1
+      // 出盒：半径达到 D 形盒半径 → 停止驱动，交给常规物理直线飞出
+      if (st.r >= R) { body._cycOut = cy.id; body._cyc = null; continue }
+      const dth = wAbs / 60
+      const thNew = st.th + dth
+      // 穿缝：极角跨过 0 / π（水平缝隙）
+      if (Math.floor(thNew / Math.PI) !== Math.floor(st.th / Math.PI)) {
+        st.v = Math.sqrt(st.v * st.v + (2 * Math.abs(q) * U) / m)
+        st.cross++
+        cy._crossings = st.cross
       }
-      if (sgn !== 0) cy._dySgn = sgn
-      // 盒内一律精确旋转（含缝内——缝很窄，磁场近似的误差可忽略）
-      {
-        const w = (q * B) / m, phi = w / 60
-        const vxs = body.velocity.x * VEL_SCALE, vys = body.velocity.y * VEL_SCALE
-        const cs = Math.cos(phi), sn = Math.sin(phi)
-        Matter.Body.setVelocity(body, {
-          x: (vxs * cs - vys * sn) / VEL_SCALE,
-          y: (vxs * sn + vys * cs) / VEL_SCALE,
-        })
+      st.th = thNew
+      st.r = (m * st.v) / (Math.abs(q) * B) * SCALE
+      if (st.r >= R) {
+        // 到达盒边缘的这一帧仍画在边缘上，下一帧起直线飞出
+        const px = cy.x + Math.cos(st.th) * R, py = cy.y + Math.sin(st.th) * R
+        Matter.Body.setPosition(body, { x: px, y: py }, false)
+        const vpx = (st.v * -Math.sin(st.th)) / VEL_SCALE, vpy = (st.v * Math.cos(st.th)) / VEL_SCALE
+        Matter.Body.setVelocity(body, { x: vpx, y: vpy })
+        body.positionPrev = { x: body.position.x - body.velocity.x, y: body.position.y - body.velocity.y }
+        body._cycOut = cy.id; body._cyc = null
+        continue
       }
+      const px = cy.x + Math.cos(st.th) * st.r, py = cy.y + Math.sin(st.th) * st.r
+      Matter.Body.setPosition(body, { x: px, y: py }, false)
+      const vpx = (st.v * -Math.sin(st.th)) / VEL_SCALE, vpy = (st.v * Math.cos(st.th)) / VEL_SCALE
+      Matter.Body.setVelocity(body, { x: vpx, y: vpy })
+      body.positionPrev = { x: body.position.x - body.velocity.x, y: body.position.y - body.velocity.y }
     }
     // 点电荷不计重力（高中题设定）；带电物块/小球正常受重力
     if (c.type === 'charge') {

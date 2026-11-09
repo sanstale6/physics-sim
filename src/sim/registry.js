@@ -164,14 +164,18 @@ export const registry = {
       ctx.beginPath(); ctx.arc(c.x, c.y - gap / 2, R, Math.PI, 0); ctx.fill()
       ctx.beginPath(); ctx.arc(c.x, c.y + gap / 2, R, 0, Math.PI, false); ctx.lineTo(c.x - R, c.y + gap / 2); ctx.stroke()
       ctx.beginPath(); ctx.arc(c.x, c.y + gap / 2, R, 0, Math.PI); ctx.fill()
-      // 中缝加速电场箭头
+      // 中缝加速电场箭头：交变电场每半个周期反向，按穿缝次数奇偶翻转（教学重点）
+      const up = ((c._crossings ?? 0) % 2) === 0
+      const y1 = up ? c.y + gap / 2 : c.y - gap / 2, y2 = up ? c.y - gap / 2 : c.y + gap / 2
       ctx.strokeStyle = '#ffd166'; ctx.fillStyle = '#ffd166'; ctx.lineWidth = 2
-      ctx.beginPath(); ctx.moveTo(c.x, c.y + gap / 2); ctx.lineTo(c.x, c.y - gap / 2); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(c.x - 6, c.y - gap / 2 + 8); ctx.lineTo(c.x, c.y - gap / 2); ctx.lineTo(c.x + 6, c.y - gap / 2 + 8); ctx.fill()
+      ctx.beginPath(); ctx.moveTo(c.x, y1); ctx.lineTo(c.x, y2); ctx.stroke()
+      const tipY = y2, baseY = up ? y2 + 9 : y2 - 9
+      ctx.beginPath(); ctx.moveTo(c.x - 6, baseY); ctx.lineTo(c.x, tipY); ctx.lineTo(c.x + 6, baseY); ctx.fill()
       // 标注
       ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#9fb3c8'
       ctx.fillText('B = ' + B + 'T', c.x, c.y - R - 10)
       ctx.fillText('U = ' + U + 'V', c.x + R + 6, c.y + 3)
+      if (c._crossings) ctx.fillText('已加速 ' + c._crossings + ' 次', c.x, c.y + R + 16)
       ctx.restore()
     },
   },
@@ -990,6 +994,23 @@ function drawCircuit(ctx, c, all) {
 
   switch (c.type) {
     case 'battery': {
+      if (p.ac) {
+        // 交流电源：高中课本符号——圆圈里一条正弦波
+        ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2 * LW
+        ctx.beginPath(); ctx.arc(0, 0, 12, 0, 7); ctx.stroke()
+        line(-g, 0, -12, 0); line(12, 0, g, 0)
+        ctx.beginPath()
+        for (let i = 0; i <= 24; i++) {
+          const x = -7.5 + (i / 24) * 15
+          const y = -5 * Math.sin((i / 24) * Math.PI * 2)
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)
+        }
+        ctx.stroke()
+        ctx.fillStyle = '#ffd166'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'
+        ctx.fillText('~', 0, -16)
+        if (p.freq) ctx.fillText(`${p.freq} Hz`, 0, 24)
+        break
+      }
       // 长线为正极（+x 方向）
       line(-6, -10, -6, 10); line(6, -18, 6, 18)
       ctx.strokeStyle = '#ffd166'

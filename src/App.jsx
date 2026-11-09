@@ -132,6 +132,7 @@ export default function App() {
           showB={showB} onToggleB={() => setShowB(v => !v)}
           onUndo={sim.undo} onRedo={sim.redo} canUndo={sim.canUndo} canRedo={sim.canRedo}
           onHelp={() => setShowHelp(true)} gravity={sim.gravity} onToggleGravity={() => sim.setGravity(!sim.gravity)}
+          coulomb={sim.coulomb} onToggleCoulomb={() => sim.setCoulomb(!sim.coulomb)}
           speed={sim.speed} onSpeed={sim.setSpeed}
           tool={tool} onToolSelect={() => pickTool('select')} />
       </header>

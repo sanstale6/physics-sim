@@ -221,7 +221,7 @@ Object.assign(presets, {
   ],
   回旋加速器: [
     { type: 'cyclotron', x: 480, y: 300, props: { R: 170, U: 2, B: 2 } },
-    { type: 'charge', x: 480, y: 300, props: { q: 1, m: 0.5, r: 8, v0x: 2, v0y: 0 } },
+    { type: 'charge', x: 480, y: 300, props: { q: 1, m: 0.5, r: 8, v0x: 0.5, v0y: 0 } },
   ],
   // 电压表外接：V 直接并在 R 两端（A 在干路）。I = 6/20.5 ≈ 0.293A，V 读数 = U_R（偏小方向）
   电压表外接: [
