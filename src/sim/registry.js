@@ -1013,8 +1013,20 @@ function drawCircuit(ctx, c, all) {
       else line(-g + 2, 0, g - 2, -12)
       break
     }
-    case 'ammeter':
-    case 'voltmeter':
+    case 'ammeter': {
+      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * LW
+      ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke()
+      ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText('A', 0, 1)
+      break
+    }
+    case 'voltmeter': {
+      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * LW
+      ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke()
+      ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText('V', 0, 1)
+      break
+    }
     case 'multimeter': {
       const mode = ['A', 'V', 'Ω'][Math.round(p.mode ?? 0)]
       // 真实万用表：方形表盘 + 弧形刻度 + 指针 + 红黑表笔（红进黑出）
