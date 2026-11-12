@@ -83,6 +83,33 @@ export function applyForces(components) {
       Matter.Body.applyForce(b, b.position, { x: Fm * ux, y: Fm * uy })
     }
 
+  // 失重物体（g=0）：matter 没有 body.gravityScale 开关，全局重力会施加到每个非静态体。
+  // 靠施加「大小相等、方向相反」的反向力抵消，使行星只剩引力提供向心力（太空环境演示）。
+  for (const c of components) {
+    if (!c.body || c.body.isStatic || c.props.g !== 0) continue
+    const gw = gravityState.on ? c.body.mass * GRAV.y * GRAV.scale : 0
+    if (gw) Matter.Body.applyForce(c.body, c.body.position, { x: 0, y: -gw })
+  }
+
+  // 万有引力：F = G·M·m / r²，指向引力源（恒星/大质量天体）。
+  // 教学缩放：G·M 默认 120，使 r=300px(3m) 圆轨道周期 2πr/√(GM/r) = 2π×3/√40 ≈ 2.98s，适合课堂观察。
+  const gravs = components.filter(c => c.type === 'gravity')
+  for (const g of gravs) {
+    const GM = (g.props.G ?? 1) * (g.props.M ?? 120)   // N·m²/kg（教学值）
+    for (const c of components) {
+      if (c === g || !c.body || c.body.isStatic || c.type === 'gravity') continue
+      const m = c.props.m ?? 0
+      if (m <= 0) continue
+      const dx = g.x - c.body.position.x, dy = g.y - c.body.position.y
+      const rPx = Math.max(Math.hypot(dx, dy), 20)      // 软化：避免 r→0 时力爆炸
+      const r = rPx / SCALE
+      const F = GM * m / (r * r)                        // N
+      const Fm = F * FORCE_SCALE
+      const ux = dx / rPx, uy = dy / rPx
+      Matter.Body.applyForce(c.body, c.body.position, { x: Fm * ux, y: Fm * uy })
+    }
+  }
+
   // 场区域内的电荷
   // 磁场：洛伦兹力只改变速度方向。若用「每步加力」的半隐式欧拉，  // 圆运动会一步步变大（能量漂移），所以直接按 ω = qB/m 精确旋转速度矢量。
   // 电场：F = qE，仍按力施加。
@@ -281,11 +308,7 @@ export function applyForces(components) {
       let B = 0
       for (const f of fields) if (f.type === 'uniformB' && inside(b, f)) B += f.props.bz
       rod.props._eInst = B * L * (vx * Math.sin(th) - vy * Math.cos(th))
-      // 导轨上的棒默认由支持力托住（g=0），否则正常受重力
-      if (!rod.props.g) {
-        const gw = gravityState.on ? b.mass * GRAV.y * GRAV.scale : 0
-        if (gw) Matter.Body.applyForce(b, b.position, { x: 0, y: -gw })
-      }
+      // 导轨上的棒 g=0（失重）已由上方统一失重段抵消重力，此处不再重复施力（否则 force 累加导致向上漂移）
     }
     const res = solve(components)
     if (res?.currents) {

@@ -3,9 +3,9 @@ import { registry } from '../sim/registry.js'
 import { presets } from '../sim/presets.js'
 
 const GROUPS = [
-  ['力学', ['select', 'particle', 'block', 'ball', 'incline', 'ground', 'track', 'conveyor', 'constantForce', 'spring', 'rope', 'pulley', 'pendulum']],
+  ['力学', ['select', 'particle', 'block', 'ball', 'incline', 'ground', 'track', 'conveyor', 'constantForce', 'gravity', 'spring', 'rope', 'pulley', 'pendulum']],
   ['电磁', ['charge', 'uniformE', 'uniformB', 'metalRod', 'magnet', 'compass', 'solenoid', 'electronGun', 'plates', 'cyclotron']],
-  ['电路', ['battery', 'wire', 'junction', 'resistor', 'rheostat', 'bulb', 'switch', 'ammeter', 'voltmeter', 'capacitor']],
+  ['电路', ['battery', 'wire', 'junction', 'resistor', 'rheostat', 'bulb', 'switch', 'ammeter', 'voltmeter', 'diode', 'multimeter', 'capacitor']],
   ['光学', ['lightSource', 'mirror', 'lens', 'screen']],
 ]
 const BY_TYPE = Object.fromEntries(GROUPS.flatMap(([, ts]) => ts.map(t => [t, true])))

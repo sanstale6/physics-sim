@@ -206,3 +206,9 @@ Inspector 据此生成滑条/数字框，避免硬编码。
 - 缓存 key 里电容 U 变化必须进 key（`'C'+U.toFixed(6)`），否则充放电过程中 solve 不重算、I 冻结
 - 电容 U 有方向（b 端为参考正端）；功率可负表示放电，不计入总功率
 - 新增预设「电容充放电」+ scripts/capacitor.mjs 8 断言（充电指数上升、放电指数衰减、稳态电流趋零）
+
+## 19. 第 19 轮：万有引力（开普勒定律）
+- gravity 元件（无刚体）作为引力源，engine 在 applyForces 里对每个有质量非静态体施加 F=GM·m/r²（指向源）；GM 默认 120 使 r=3m 圆轨道周期 2.98s 适合课堂
+- 失重实现：matter 0.19 无 body.gravityScale，全局重力施加到每个非静态体，故用「反向力抵消」——统一失重段对所有 `props.g===0` 的 body 施加 `-mass*GRAV.y*GRAV.scale`；ball 的 g 字段控制（g=0 同时 body 加 frictionAir:0 模拟真空）
+- 圆轨道验证：v=√(GM/r) 时 symplectic Euler 半隐式积分对向心力漂移 ±5px/200 步内，可接受，无需像 B 场那样解析积分
+- 新增预设「行星圆周运动」「椭圆轨道」+ scripts/gravity.mjs 6 断言（圆轨道半径稳定、速率恒定、椭圆远/近地点符合 v<v_circ 的椭圆）

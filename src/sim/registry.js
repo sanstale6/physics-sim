@@ -37,7 +37,7 @@ export const registry = {
   },
   ball: {
     name: '小球',
-    defaults: () => ({ m: 1, r: 20, rest: 0.8, v0x: 0, v0y: 0 }),
+    defaults: () => ({ m: 1, r: 20, rest: 0.8, v0x: 0, v0y: 0, g: 1 }),
     fields: [
       { key: 'm', label: '质量', unit: 'kg', min: 0.1, max: 10, step: 0.1 },
       { key: 'r', label: '半径', unit: 'px', min: 8, max: 60, step: 1 },
@@ -45,9 +45,10 @@ export const registry = {
       { key: 'v0x', label: '初速度 vx', unit: 'm/s', min: -20, max: 20, step: 0.5 },
       { key: 'v0y', label: '初速度 vy（向上为正）', unit: 'm/s', min: -20, max: 20, step: 0.5 },
       { key: 'q', label: '带电量', unit: 'μC', min: -100, max: 100, step: 1 },
+      { key: 'g', label: '重力（0=失重）', min: 0, max: 1, step: 1 },
     ],
     body: (x, y, p) => ({ type: 'circle', r: p.r,
-      options: { density: 0.001, friction: 0, restitution: p.rest ?? 0.8 }, label: 'ball' }),
+      options: { density: 0.001, friction: 0, restitution: p.rest ?? 0.8, ...(p.g === 0 ? { frictionAir: 0 } : {}) }, label: 'ball' }),
   },
   incline: {
     name: '斜面',
@@ -366,6 +367,31 @@ export const registry = {
       drawArrow(ctx, { x: c.x, y: c.y }, { x: c.x + fx / mag * L, y: c.y - fy / mag * L }, '#ff5f56')
       ctx.fillStyle = '#ff8b84'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'
       ctx.fillText('F=' + mag.toFixed(0) + 'N', c.x, c.y + 20)
+    },
+  },
+  gravity: {
+    name: '引力源（恒星）',
+    defaults: () => ({ M: 120, G: 1, r: 26 }),
+    fields: [
+      { key: 'M', label: '中心质量 M', unit: '', min: 1, max: 500, step: 1 },
+      { key: 'G', label: '引力常数 G', unit: '', min: 0.1, max: 10, step: 0.1 },
+    ],
+    body: null,
+    overlay: (ctx, c) => {
+      const { M, G, r = 26 } = c.props
+      const x = c.x, y = c.y
+      ctx.save()
+      // 恒星本体（发光圆 + 光晕）
+      const grad = ctx.createRadialGradient(x, y, r * 0.2, x, y, r)
+      grad.addColorStop(0, '#fff7d6'); grad.addColorStop(0.55, '#ffcf5c'); grad.addColorStop(1, 'rgba(255,175,40,0)')
+      ctx.fillStyle = grad
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#ffcf5c'
+      ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#7a5a00'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'
+      ctx.fillText('M=' + M, x, y + r + 16)
+      ctx.fillText('G=' + G, x, y + r + 30)
+      ctx.restore()
     },
   },
   charge: {

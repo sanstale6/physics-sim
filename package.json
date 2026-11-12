@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node scripts/bodies.mjs && node scripts/charged.mjs && node scripts/regression.mjs && node scripts/incline.mjs && node scripts/fields.mjs && node scripts/track.mjs && node scripts/rope.mjs && node scripts/pendulum.mjs && node scripts/spring.mjs && node scripts/presets.mjs && node scripts/draw.mjs && node scripts/parallel.mjs && node scripts/circuits2.mjs && node scripts/runtime.mjs && node scripts/cyc.mjs && node scripts/induction.mjs && node scripts/coulomb_switch.mjs && node scripts/capacitor.mjs"
+    "test": "node scripts/bodies.mjs && node scripts/charged.mjs && node scripts/regression.mjs && node scripts/incline.mjs && node scripts/fields.mjs && node scripts/track.mjs && node scripts/rope.mjs && node scripts/pendulum.mjs && node scripts/spring.mjs && node scripts/presets.mjs && node scripts/draw.mjs && node scripts/parallel.mjs && node scripts/circuits2.mjs && node scripts/runtime.mjs && node scripts/cyc.mjs && node scripts/induction.mjs && node scripts/coulomb_switch.mjs && node scripts/capacitor.mjs && node scripts/gravity.mjs"
   },
   "dependencies": {
     "matter-js": "0.19.0",

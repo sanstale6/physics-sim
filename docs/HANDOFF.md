@@ -93,6 +93,14 @@ pnpm test           # 全链回归（14 个脚本，见下）
 - scripts/capacitor.mjs（8 断言）：串联 RC 回路 τ=(0.5+10+0.1)×0.1=1.06s，充电 U 0→5.98V 单调、稳态 I→1.89e-3A、放电短路电源后 U 5.98→0.015V
 - 预设「电容充放电」：battery(E6,r0.5)+switch(闭合)+resistor(10Ω)+capacitor(100μF,angle180)，矩形串联环，τ≈1s 秒级可见
 
+## 万有引力 / 行星运动（第 19 轮）
+- engine.js applyForces：库仑力后加万有引力段——`F=GM·m/r²` 指向源（GM=(G??1)*(M??120) 教学值，rPx=max(hypot,20) 软化防 r→0 爆炸，Fm=F*FORCE_SCALE）
+- **matter 0.19 没有 body.gravityScale**（grep 全库只在 Engine.js 用全局 gravity.scale）：所以「失重」靠施加反向力抵消全局重力，统一段在万有引力段之前，对所有 `props.g === 0` 的非静态 body 施加 `-mass*GRAV.y*GRAV.scale`
+- registry.js：gravity 元件（defaults `{M:120,G:1,r:26}`，fields M/G，body:null，overlay 画发光恒星+光晕+M/G 标注）；ball 加 g 字段（重力 0=失重/1=受重力），g=0 时 body 加 frictionAir:0（真空中无空气阻力）
+- 数值：GM=120，r=300px(3m) → 圆速度 v=√(GM/r)≈6.32 m/s，周期 2.98s；椭圆初速 4<6.32 → 近地点 75px、远地点 300px
+- 预设：行星圆周运动、椭圆轨道；scripts/gravity.mjs（6 断言：圆轨道半径 294.5-305px 稳定、速率 6.22-6.44 恒定、椭圆远地点 300.1/近地点 75.9）
+- 教训：metalRod 原有的 g=0 重力抵消与统一失重段**重复施力**（force 累加导致棒向上漂移），已删金属棒段内抵消逻辑
+
 ## 已知遗留 / 下一步建议
 - ~~磁铁调角度时可能与极性标注分离~~ 已修复：useSim.js 重建刚体时静态元件 setAngle 被清零，已统一传 ang
 - ~~电压表内接/外接误差演示、电桥、变阻器分压接法：未做~~ 已完成：4 个新预设（电压表外接/内接、惠斯通电桥、变阻器分压）+ scripts/circuits2.mjs 15 断言（外接 Iv=5.85e-6、电桥平衡 Ig=0/失衡 Ig=0.0346、分压 I载=0.1935）
