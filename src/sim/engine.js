@@ -299,6 +299,24 @@ export function applyForces(components) {
     }
   }
 
+  // —— 电容器充放电（RC 暂态）——
+  // 电容是储能元件：每个物理步用节点电压法求瞬时电流 Ic，再积分电容电压
+  //   dU/dt = −Ic / C_eff   （Ic 正方向 a→b，即从 + 端 b 流出 = 放电）
+  // C 单位 μF，内部放大 1000 倍（CAP_TC_SCALE）让 RC 时间常数 τ=RC 落在秒级、肉眼可见。
+  const caps = components.filter(c => c.type === 'capacitor')
+  if (caps.length) {
+    const res = solve(components)
+    if (res?.currents) {
+      const dt = 1 / 60   // 物理步长 s（与 useSim 的 STEP_MS = 1000/60 一致）
+      for (const cap of caps) {
+        const Ic = res.currents.get(cap.id) ?? 0
+        const Ceff = Math.max(0.01, cap.props.C ?? 100) * 1e-3   // μF → 教学 F
+        // 前向欧拉：Ic<0 充电（U 上升），Ic>0 放电（U 下降）
+        cap.props.U = (cap.props.U ?? 0) - (Ic * dt) / Ceff
+      }
+    }
+  }
+
   // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
   for (const mg of components) {
     if (mg.type !== 'magnet') continue

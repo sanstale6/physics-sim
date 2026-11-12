@@ -629,6 +629,17 @@ export const registry = {
     body: null,
     overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
   },
+  capacitor: {
+    name: '电容器',
+    defaults: () => ({ C: 100, len: 90, angle: 90 }),
+    fields: [
+      { key: 'C', label: '电容 C', unit: 'μF', min: 20, max: 500, step: 10 },
+      { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
+      { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
+    ],
+    body: null,
+    overlay: (ctx, c, all) => drawCircuit(ctx, c, all),
+  },
   wire: {
     name: '导线',
     defaults: () => ({ len: 90, angle: 0 }),
@@ -1059,6 +1070,12 @@ function drawCircuit(ctx, c, all) {
       line(10, -9, 10, 9)
       break
     }
+    case 'capacitor': {
+      // 两条等长平行线（高中电容符号），垂直于轴线
+      ctx.strokeStyle = '#dbe6f5'; ctx.lineWidth = 2 * LW
+      line(-8, -11, -8, 11); line(8, -11, 8, 11)
+      break
+    }
     default: break
   }
   ctx.restore()
@@ -1101,6 +1118,7 @@ function drawCircuit(ctx, c, all) {
   if (c.type === 'battery') label = `E=${p.E}V r=${p.r}Ω`
   else if (c.type === 'resistor' || c.type === 'rheostat' || c.type === 'bulb') label = `R=${p.R}Ω`
   else if (c.type === 'switch') label = p.closed ? '闭合' : '断开'
+  else if (c.type === 'capacitor') label = `C=${p.C}μF U=${(p.U ?? 0).toFixed(2)}V`
   if (c.type === 'ammeter') label = `I=${Math.abs(I).toFixed(3)}A`
   if (c.type === 'resistor' || c.type === 'rheostat' || c.type === 'bulb') label += `  P=${(res?.power.get(c.id) ?? 0).toFixed(2)}W`
   if (c.type === 'voltmeter') {

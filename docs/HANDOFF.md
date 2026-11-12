@@ -85,6 +85,14 @@ pnpm test           # 全链回归（14 个脚本，见下）
 - **新增「忽略电荷相互作用」开关**：engine.js `coulombState.on`，useSim `coulomb/setCoulomb`，Toolbar 按钮（电荷力 / 忽略电荷力）。关掉后电荷只受外加电场/磁场作用，做「粒子在电场中偏转」演示时避免同批电荷互斥干扰
 - **交流电源样式**：电源 ac=1 时画高中课本符号（圆圈内正弦波 + ~ + 频率），中缝电场方向随穿缝次数奇偶翻转
 
+## 电容器（第 18 轮）
+- circuit.js：CIRCUIT_TYPES 加 'capacitor'；resistance 返回 0.1（ESR，储能元件不耗能）；solve 的电源分支判据扩为 `battery||plates||metalRod||capacitor`（capacitor 的 E=`props.U`，r=0.1）；缓存 key 补 `'C' + (props.U??0).toFixed(6)`（充放电电压变化必须触发重算）；功率分支 `power=(props.U)*i`（可负=放电，不计 totalPower）；open 断路过滤加 'capacitor'（充满后 I→0 正常）
+- engine.js applyForces：金属棒段后插入电容积分段——`U = U - I·dt/Ceff`（前向欧拉，dt=1/60，`Ceff = (props.C??100)*1e-3` 放大 1000 倍把 μF 教学量级拉回秒级 τ）；I 取 solve(components).currents 的 capacitor 电流
+- registry.js：capacitor 元件（defaults `{C:100, len:90, angle:90}`，fields C/len/angle，body:null，overlay=drawCircuit 两条平行竖线），label `C=…μF U=…V`
+- 符号约定：电容 b 端（angle 方向 +len/2）= 参考正端，U=V_b−V_a；solve 电流 I=(V_a−V_b+U)/r；积分 dU/dt=−I/C 自洽。b 端接电源正极侧则 U 为正
+- scripts/capacitor.mjs（8 断言）：串联 RC 回路 τ=(0.5+10+0.1)×0.1=1.06s，充电 U 0→5.98V 单调、稳态 I→1.89e-3A、放电短路电源后 U 5.98→0.015V
+- 预设「电容充放电」：battery(E6,r0.5)+switch(闭合)+resistor(10Ω)+capacitor(100μF,angle180)，矩形串联环，τ≈1s 秒级可见
+
 ## 已知遗留 / 下一步建议
 - ~~磁铁调角度时可能与极性标注分离~~ 已修复：useSim.js 重建刚体时静态元件 setAngle 被清零，已统一传 ang
 - ~~电压表内接/外接误差演示、电桥、变阻器分压接法：未做~~ 已完成：4 个新预设（电压表外接/内接、惠斯通电桥、变阻器分压）+ scripts/circuits2.mjs 15 断言（外接 Iv=5.85e-6、电桥平衡 Ig=0/失衡 Ig=0.0346、分压 I载=0.1935）

@@ -1,7 +1,7 @@
 // 直流电路：端子-节点 + 节点电压法（Norton 等效，无理想电压源奇异问题）
 // 约定：端子 a 为 −，b 为 +（电池），电流正方向 a→b
 export const CIRCUIT_TYPES = [
-  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates', 'diode', 'multimeter', 'metalRod']
+  'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates', 'diode', 'multimeter', 'metalRod', 'capacitor']
 
 export function pins(o) {
   if (o.type === 'metalRod' && o.body) {
@@ -47,6 +47,7 @@ export function resistance(o) {
     case 'plates': return 0.5   // 极板间等离子体内阻
     case 'metalRod': return Math.max(0.01, p.R ?? 2)
     case 'diode': return p._on === false ? 1e12 : 1e-2   // 二极管：默认导通，_on=false 截止（solve 迭代判定）
+    case 'capacitor': return 0.1   // 电容 ESR：储能元件，不耗能（见 power 判断）
     case 'multimeter': {
       const mode = ['A','V','Ω'][Math.round(p.mode ?? 0)]
       if (mode === 'A') return 0.1        // 电流档：串联低内阻（含表笔）
@@ -201,7 +202,8 @@ export function solve(objs) {
     (e.type === 'battery' ? (e.props._eInst ?? e.props.E) + '/' + e.props.r
       : e.type === 'metalRod' ? (e.props._eInst ?? 0).toFixed(4) + '/' + (e.props.R ?? 2)
         : e.type === 'plates' ? 'U' + (e.props.U ?? 0)   // 极板电压会随附着电荷变化，必须进 key（否则灯泡功率不变）
-          : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
+          : e.type === 'capacitor' ? 'C' + (e.props.U ?? 0).toFixed(6)   // 电容电压随充放电变化
+            : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
   if (key === lastKey) return lastResult
 
   const { pts, nodeOf, count } = clusterNodes(els)
@@ -214,11 +216,16 @@ export function solve(objs) {
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
     if (a === nb) continue
-    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod') {
-      const r = e.type === 'plates' ? 0.5 : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2) : Math.max(0.01, e.props.r ?? 0.5)
+    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod' || e.type === 'capacitor') {
+      const r = e.type === 'plates' ? 0.5
+        : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2)
+          : e.type === 'capacitor' ? 0.1   // ESR：电容作为电压源 U=Q/C 的内阻（数值阻尼）
+            : Math.max(0.01, e.props.r ?? 0.5)
       const g = 1 / r
       G[a][a] += g; G[nb][nb] += g; G[a][nb] -= g; G[nb][a] -= g
-      const E = e.type === 'plates' ? (e.props.U ?? 0) : (e.props._eInst ?? e.props.E ?? 3)
+      const E = e.type === 'plates' ? (e.props.U ?? 0)
+        : e.type === 'capacitor' ? (e.props.U ?? 0)   // 电容两端电压（engine 每步积分 Q 后写入）
+          : (e.props._eInst ?? e.props.E ?? 3)
       I[nb] += E * g; I[a] -= E * g
     } else {
       const g = 1 / resistance(e)
@@ -250,9 +257,14 @@ export function solve(objs) {
   const currents = new Map()
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
-    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod') {
-      const r0 = e.type === 'plates' ? 0.5 : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2) : Math.max(0.01, e.props.r ?? 0.5)
-      const E0 = e.type === 'plates' ? (e.props.U ?? 0) : (e.props._eInst ?? e.props.E ?? 3)
+    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod' || e.type === 'capacitor') {
+      const r0 = e.type === 'plates' ? 0.5
+        : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2)
+          : e.type === 'capacitor' ? 0.1
+            : Math.max(0.01, e.props.r ?? 0.5)
+      const E0 = e.type === 'plates' ? (e.props.U ?? 0)
+        : e.type === 'capacitor' ? (e.props.U ?? 0)
+          : (e.props._eInst ?? e.props.E ?? 3)
       currents.set(e.id, (V[a] - V[nb] + E0) / r0)
     }
     else currents.set(e.id, (V[a] - V[nb]) / resistance(e))
@@ -268,6 +280,10 @@ export function solve(objs) {
       const E = e.props.E ?? 3
       sourcePower += E * i
       if (Math.abs(i) > 0.75 * (E / Math.max(0.01, e.props.r ?? 0.5))) warnings.push({ kind: 'short', text: '电流接近 ε/r，疑似短路' })
+    } else if (e.type === 'capacitor') {
+      // 储能元件：瞬时功率 p = U·I（充电时吸收功率为负方向，放电时释放），不计入耗能总功率
+      const p = (e.props.U ?? 0) * i
+      power.set(e.id, p)
     } else {
       const R = resistance(e)
       const p = i * i * R
@@ -277,7 +293,7 @@ export function solve(objs) {
     maxI = Math.max(maxI, Math.abs(i))
   }
   // 导线自身电阻 1e-3Ω，微小电流（<1e-6A）在导线上压降为 0 是正常现象，不算断路
-  const open = els.filter((e) => !['battery', 'switch', 'wire', 'metalRod'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
+  const open = els.filter((e) => !['battery', 'switch', 'wire', 'metalRod', 'capacitor'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
   if (maxI < 1e-6 && els.some((e) => e.type === 'battery' || e.type === 'metalRod')) warnings.push({ kind: 'open', text: '电路未闭合（开关断开或无回路）' })
   else if (open.length) warnings.push({ kind: 'open', text: open.length + ' 个元件无电流（断路）' })
 

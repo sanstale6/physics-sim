@@ -292,4 +292,11 @@ Object.assign(presets, {
     { type: 'bulb', x: 500, y: 400, props: { R: 12, len: 200, angle: 0 } },
     { type: 'wire', x: 300, y: 400, props: { len: 200, angle: 0 } },
   ],
+  // 电容充放电：闭合开关后电容经电阻充电，U 指数上升至电源电压（τ=RC≈1s）；断开开关保持电荷
+  电容充放电: [
+    { type: 'battery', x: 200, y: 300, props: { E: 6, r: 0.5, len: 200, angle: 90 } },
+    { type: 'switch', x: 300, y: 200, props: { closed: true, len: 200, angle: 0 } },
+    { type: 'resistor', x: 400, y: 300, props: { R: 10, len: 200, angle: 90 } },
+    { type: 'capacitor', x: 300, y: 400, props: { C: 100, len: 200, angle: 180 } },
+  ],
 })
