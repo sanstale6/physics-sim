@@ -3,6 +3,19 @@
 export const CIRCUIT_TYPES = [
   'junction','battery', 'resistor', 'bulb', 'rheostat', 'switch', 'ammeter', 'voltmeter', 'wire', 'solenoid', 'plates', 'diode', 'multimeter', 'metalRod', 'capacitor']
 
+// 欧姆表（多用电表 Ω 档）内部结构：表内电池 + 内阻（含调零电阻）
+// 真实原理：表笔短接 → I满 = E/R内；表笔接电阻 R → I = E/(R内+R) → R = E/I − R内
+export const OHM_BATTERY = 3      // 欧姆表内部电池电压 V
+export const OHM_RESISTOR = 100   // 欧姆表内阻（中值电阻：指针半偏对应 100Ω）Ω
+
+// 多用电表档位：mode 0=A 1=V 2=Ω
+export function meterMode(e) {
+  return ['A', 'V', 'Ω'][Math.round(e.props?.mode ?? 0)] ?? 'A'
+}
+export function isOhmMeter(e) {
+  return e.type === 'multimeter' && meterMode(e) === 'Ω'
+}
+
 export function pins(o) {
   if (o.type === 'metalRod' && o.body) {
     // 金属棒会滑动/被拖动：端子必须跟着刚体走，否则电路接不上
@@ -49,10 +62,10 @@ export function resistance(o) {
     case 'diode': return p._on === false ? 1e12 : 1e-2   // 二极管：默认导通，_on=false 截止（solve 迭代判定）
     case 'capacitor': return 0.1   // 电容 ESR：储能元件，不耗能（见 power 判断）
     case 'multimeter': {
-      const mode = ['A','V','Ω'][Math.round(p.mode ?? 0)]
+      const mode = meterMode(o)
       if (mode === 'A') return 0.1        // 电流档：串联低内阻（含表笔）
       if (mode === 'V') return 1e6        // 电压档：并联高内阻
-      return 1e12                         // 欧姆档：脱离电源使用，不参与电路求解
+      return OHM_RESISTOR                 // 欧姆档：表内电池 + 内阻，测电流算阻值
     }
     default: return null
   }
@@ -203,7 +216,9 @@ export function solve(objs) {
       : e.type === 'metalRod' ? (e.props._eInst ?? 0).toFixed(4) + '/' + (e.props.R ?? 2)
         : e.type === 'plates' ? 'U' + (e.props.U ?? 0)   // 极板电压会随附着电荷变化，必须进 key（否则灯泡功率不变）
           : e.type === 'capacitor' ? 'C' + (e.props.U ?? 0).toFixed(6)   // 电容电压随充放电变化
-            : e.type === 'switch' ? String(e.props.closed) : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
+            : e.type === 'switch' ? String(e.props.closed)
+              : e.type === 'multimeter' ? 'm' + Math.round(e.props.mode ?? 0)   // 档位变化必须重算
+                : (e.props.R ?? '')) + ':' + (e.props.len ?? 90)).join('|')
   if (key === lastKey) return lastResult
 
   const { nodeOf, count } = clusterNodes(els)
@@ -216,17 +231,19 @@ export function solve(objs) {
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
     if (a === nb) continue
-    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod' || e.type === 'capacitor') {
+    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod' || e.type === 'capacitor' || isOhmMeter(e)) {
       const r = e.type === 'plates' ? 0.5
         : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2)
           : e.type === 'capacitor' ? 0.1   // ESR：电容作为电压源 U=Q/C 的内阻（数值阻尼）
-            : Math.max(0.01, e.props.r ?? 0.5)
+            : isOhmMeter(e) ? OHM_RESISTOR
+              : Math.max(0.01, e.props.r ?? 0.5)
       const g = 1 / r
       G[a][a] += g; G[nb][nb] += g; G[a][nb] -= g; G[nb][a] -= g
       const E = e.type === 'plates' ? (e.props.U ?? 0)
         : e.type === 'capacitor' ? (e.props.U ?? 0)   // 电容两端电压（engine 每步积分 Q 后写入）
           : e.type === 'metalRod' ? (e.props._eInst ?? 0)   // 感应电动势（无外接 E，静止=0）
-            : (e.props._eInst ?? e.props.E ?? 3)
+            : isOhmMeter(e) ? OHM_BATTERY
+              : (e.props._eInst ?? e.props.E ?? 3)
       I[nb] += E * g; I[a] -= E * g
     } else {
       const g = 1 / resistance(e)
@@ -258,15 +275,17 @@ export function solve(objs) {
   const currents = new Map()
   for (const e of els) {
     const { a, b: nb } = idx.get(e.id)
-    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod' || e.type === 'capacitor') {
+    if (e.type === 'battery' || e.type === 'plates' || e.type === 'metalRod' || e.type === 'capacitor' || isOhmMeter(e)) {
       const r0 = e.type === 'plates' ? 0.5
         : e.type === 'metalRod' ? Math.max(0.01, e.props.R ?? 2)
           : e.type === 'capacitor' ? 0.1
-            : Math.max(0.01, e.props.r ?? 0.5)
+            : isOhmMeter(e) ? OHM_RESISTOR
+              : Math.max(0.01, e.props.r ?? 0.5)
       const E0 = e.type === 'plates' ? (e.props.U ?? 0)
         : e.type === 'capacitor' ? (e.props.U ?? 0)
           : e.type === 'metalRod' ? (e.props._eInst ?? 0)   // 感应电动势（无外接 E，静止=0）
-            : (e.props._eInst ?? e.props.E ?? 3)
+            : isOhmMeter(e) ? OHM_BATTERY
+              : (e.props._eInst ?? e.props.E ?? 3)
       currents.set(e.id, (V[a] - V[nb] + E0) / r0)
     }
     else currents.set(e.id, (V[a] - V[nb]) / resistance(e))
@@ -295,7 +314,7 @@ export function solve(objs) {
     maxI = Math.max(maxI, Math.abs(i))
   }
   // 导线自身电阻 1e-3Ω，微小电流（<1e-6A）在导线上压降为 0 是正常现象，不算断路
-  const open = els.filter((e) => !['battery', 'switch', 'wire', 'metalRod', 'capacitor'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
+  const open = els.filter((e) => !['battery', 'switch', 'wire', 'metalRod', 'capacitor', 'multimeter'].includes(e.type) && Math.abs(currents.get(e.id)) < 1e-6)
   if (maxI < 1e-6 && els.some((e) => e.type === 'battery' || e.type === 'metalRod')) warnings.push({ kind: 'open', text: '电路未闭合（开关断开或无回路）' })
   else if (open.length) warnings.push({ kind: 'open', text: open.length + ' 个元件无电流（断路）' })
 

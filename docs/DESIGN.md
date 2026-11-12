@@ -220,3 +220,9 @@ Inspector 据此生成滑条/数字框，避免硬编码。
 - metalRod 是「无 E 字段的电动势源」：solve 的 E 默认值 `??3` 只对 battery 成立，对 metalRod 必须 `_eInst ?? 0`（静止 ε=0）；否则 Inspector 渲染（solve 先于 applyForces）时静止杆被当 3V 电源
 - 多用电表 mode 用数字 0/1/2 而非字符串（Inspector 的 number+range 控件只吃数字）；「带电测电阻」提示靠检查被测电阻的 currents 是否非零
 - 新增安培力演示（电动机/电磁炮方向）：通电金属棒在匀强磁场中受 F=BIL 加速，反电动势 ε=BLv 随速度增大抵消电源电动势，终速 v=E/(BL)
+
+## 21. 第 21 轮：磁铁磁感线 + 传送带旋转
+- 磁感线绘制：偶极场 1/r³ 衰减下，绕回 S 极的外部磁感线在离磁铁 100-300px 处场强已降到 1e-4~1e-5，所以场强截断阈值必须 ≤1e-5（原 1e-3 导致「S 极磁感线不显示」）；出射角用「朝向 S 极半球」而非全 360°，否则正前方（背向 S）的最外层磁感线绕到 ~400px 处必然断开
+- 磁铁视觉：N 在 +len/2（红）、S 在 −len/2（蓝），overlay 填充色与磁场模型方向必须一致
+- 传送带旋转：倾斜传送带（angle≠0）的带面几何 = 中心线沿上方法线上移带体半高（8px），与 matter 刚体上表面一致；接触检测复用 contactIncline（incline.js 对 conveyor 扩展），摩擦用「相对皮带速度」vrel=vt·VEL−belt 判断方向，与水平传送带 supportUnder 分支同一套逻辑
+- 带速 belt 的正方向 = 沿带面向下（右端），与 incline 斜面方向 d=(cos a, sin a) 一致；μ>tan a 时带速向上能顶住重力把物块往上送

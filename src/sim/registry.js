@@ -1,5 +1,5 @@
 import Matter from 'matter-js'
-import { solve, pins } from './circuit.js'
+import { solve, pins, OHM_BATTERY, OHM_RESISTOR } from './circuit.js'
 import { fieldAt } from './magnetism.js'
 import { capacitance } from './engine.js'
 
@@ -279,49 +279,56 @@ export const registry = {
   },
   conveyor: {
     name: '传送带',
-    defaults: () => ({ len: 320, v: 2 }),
+    defaults: () => ({ len: 320, v: 2, angle: 0 }),
     fields: [
       { key: 'len', label: '长度', unit: 'px', min: 120, max: 1200, step: 10 },
-      { key: 'v', label: '带速（正=向右）', unit: 'm/s', min: -8, max: 8, step: 0.5 },
+      { key: 'v', label: '带速（正=沿带向右）', unit: 'm/s', min: -8, max: 8, step: 0.5 },
+      { key: 'angle', label: '倾角（0=水平，正=右端低）', unit: '°', min: 0, max: 60, step: 5 },
     ],
-    body: (x, y, p) => ({ type: 'rectangle', w: p.len ?? 320, h: 16,
+    body: (x, y, p) => ({ type: 'rotRect', w: p.len ?? 320, h: 16,
+      angle: ((p.angle ?? 0) * Math.PI) / 180,
       options: { isStatic: true, friction: 0 }, label: 'conveyor' }),
     overlay: (ctx, c) => {
       const len = c.props.len ?? 320, v = c.props.v ?? 0
+      const a = ((c.props.angle ?? 0) * Math.PI) / 180
       const x = c.x, y = c.y, rr = 14, half = len / 2
-      const l = x - half + rr, rt = x + half - rr
+      const cos = Math.cos(a), sin = Math.sin(a)
       const dir = Math.sign(v) || 1
       const t = performance.now() / 1000
       ctx.save()
       ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-      // 支架腿先画（在带体后面）
+      // 支架腿先画（竖直，不随带面旋转）：连接带面 ±32% 处到下方
       ctx.strokeStyle = 'rgba(139,148,158,.75)'; ctx.lineWidth = 1.3 * LW
-      for (const lx of [x - half * 0.32, x + half * 0.32]) {
-        ctx.beginPath(); ctx.moveTo(lx, y + rr); ctx.lineTo(lx, y + rr + 18)
-        ctx.moveTo(lx - 8, y + rr + 18); ctx.lineTo(lx + 8, y + rr + 18); ctx.stroke()
+      for (const s of [-0.32, 0.32]) {
+        const bx = x + s * half * cos, by = y + s * half * sin
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by + rr + 18)
+        ctx.moveTo(bx - 8, by + rr + 18); ctx.lineTo(bx + 8, by + rr + 18); ctx.stroke()
       }
+      // 带体（随带面旋转，局部坐标）
+      ctx.translate(x, y); ctx.rotate(a)
+      const l = -half + rr, rt = half - rr
       // 皮带轮廓（上带面/下带面 + 两端半圆弧），带体加厚更醒目
       ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.6 * LW
       ctx.beginPath()
-      ctx.moveTo(l, y - rr); ctx.lineTo(rt, y - rr)
-      ctx.arc(rt, y, rr, -Math.PI / 2, Math.PI / 2)
-      ctx.lineTo(l, y + rr)
-      ctx.arc(l, y, rr, Math.PI / 2, Math.PI * 3 / 2)
+      ctx.moveTo(l, -rr); ctx.lineTo(rt, -rr)
+      ctx.arc(rt, 0, rr, -Math.PI / 2, Math.PI / 2)
+      ctx.lineTo(l, rr)
+      ctx.arc(l, 0, rr, Math.PI / 2, Math.PI * 3 / 2)
       ctx.closePath(); ctx.stroke()
       ctx.fillStyle = 'rgba(56,189,248,.06)'; ctx.fill()
       // 滚筒：实心感（深填充+青描边）+ 4 辐条 + 轴点，转动相位随带速
       const ph = (t * v * 10) % (Math.PI * 2)
       for (const cx of [l, rt]) {
-        ctx.beginPath(); ctx.arc(cx, y, rr - 3, 0, Math.PI * 2)
+        ctx.beginPath(); ctx.arc(cx, 0, rr - 3, 0, Math.PI * 2)
         ctx.fillStyle = 'rgba(7,11,18,.85)'; ctx.fill()
         ctx.strokeStyle = 'rgba(56,189,248,.95)'; ctx.lineWidth = 1.4 * LW; ctx.stroke()
         ctx.lineWidth = 1.1 * LW
         for (let k = 0; k < 4; k++) {
           const a2 = ph + (k * Math.PI) / 2
-          ctx.beginPath(); ctx.moveTo(cx, y)
-          ctx.lineTo(cx + Math.cos(a2) * (rr - 3), y + Math.sin(a2) * (rr - 3)); ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(cx, 0)
+          ctx.lineTo(cx + Math.cos(a2) * (rr - 3), Math.sin(a2) * (rr - 3)); ctx.stroke()
         }
-        ctx.beginPath(); ctx.arc(cx, y, 2.2, 0, 7); ctx.fillStyle = '#38bdf8'; ctx.fill()
+        ctx.beginPath(); ctx.arc(cx, 0, 2.2, 0, 7); ctx.fillStyle = '#38bdf8'; ctx.fill()
       }
       // 带面花纹：短斜线沿运动方向流动
       ctx.strokeStyle = 'rgba(56,189,248,.65)'; ctx.lineWidth = 1 * LW
@@ -330,18 +337,18 @@ export const registry = {
       for (let d = off; Math.abs(d) < span; d += step * dir) {
         const sx = l + d
         if (sx < l || sx > rt) continue
-        ctx.beginPath(); ctx.moveTo(sx, y - rr + 3); ctx.lineTo(sx + 6 * dir, y - rr + 6)
-        ctx.moveTo(sx, y + rr - 3); ctx.lineTo(sx + 6 * dir, y + rr - 6); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(sx, -rr + 3); ctx.lineTo(sx + 6 * dir, -rr + 6)
+        ctx.moveTo(sx, rr - 3); ctx.lineTo(sx + 6 * dir, rr - 6); ctx.stroke()
       }
-      // 速度箭头 + 标注
-      const ax = x - 26 * dir, ay = y - rr - 18
+      // 速度箭头 + 标注（沿带面方向，跟随带面旋转）
+      const ax = -26 * dir, ay = -rr - 18
       ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.5 * LW
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 46 * dir, ay)
       ctx.moveTo(ax + 46 * dir, ay); ctx.lineTo(ax + 38 * dir, ay - 4)
       ctx.moveTo(ax + 46 * dir, ay); ctx.lineTo(ax + 38 * dir, ay + 4); ctx.stroke()
       ctx.fillStyle = 'rgba(250,204,21,.95)'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'
       ctx.font = `${12 * LW}px system-ui`
-      ctx.fillText(`v = ${v.toFixed(1)} m/s`, x, ay - 6)
+      ctx.fillText(`v = ${v.toFixed(1)} m/s`, 0, ay - 6)
       ctx.restore()
     },
   },
@@ -762,10 +769,10 @@ export const registry = {
       ctx.save()
       ctx.translate(x, y); ctx.rotate(a)
       const L = len / 2, hh = 11
-      // N 半边（红）S 半边（蓝）
-      ctx.fillStyle = 'rgba(248,113,113,.28)'
-      ctx.fillRect(-L, -hh, L, hh * 2)
+      // S 半边（左，−len/2）蓝；N 半边（右，+len/2）红——与磁场模型 N 在 +len/2、S 在 −len/2 一致
       ctx.fillStyle = 'rgba(96,165,250,.28)'
+      ctx.fillRect(-L, -hh, L, hh * 2)
+      ctx.fillStyle = 'rgba(248,113,113,.28)'
       ctx.fillRect(0, -hh, L, hh * 2)
       ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.5 * LW
       ctx.strokeRect(-L, -hh, len, hh * 2)
@@ -1046,11 +1053,10 @@ function drawCircuit(ctx, c, all) {
       if (mode === 'A') frac = Math.min(1, Math.abs(I) / 1)                 // 满量程 1A
       else if (mode === 'V') frac = Math.min(1, Math.abs(uAcross(res, c, all)) / 10)  // 满量程 10V
       else {
-        const ps = pins(c)
-        const target = all.find(e => e !== c && ['resistor', 'rheostat', 'bulb'].includes(e.type) &&
-          pins(e).every((q, k) => Math.hypot(q.x - ps[k === 0 ? 0 : 1].x, q.y - ps[k === 0 ? 0 : 1].y) < 14 ||
-                                     Math.hypot(q.x - ps[k === 0 ? 1 : 0].x, q.y - ps[k === 0 ? 1 : 0].y) < 14))
-        if (target) frac = Math.min(1, (target.props.R ?? 0) / 100)         // 满量程 100Ω
+        // Ω 档：刻度右端 0Ω（满偏）、左端 ∞Ω；frac = I/I满 = R内/(R内+R)
+        const Im = res?.currents.get(c.id) ?? 0
+        const I_full = OHM_BATTERY / OHM_RESISTOR
+        frac = Math.min(1, Math.abs(Im) / I_full)
       }
       const pa = -Math.PI * 0.8 + frac * Math.PI * 0.6
       ctx.strokeStyle = '#ff5f56'; ctx.lineWidth = 1.5 * LW
@@ -1131,14 +1137,13 @@ function drawCircuit(ctx, c, all) {
     if (mode === 'A') label = `I=${Math.abs(I).toFixed(3)}A`
     else if (mode === 'V') label = `U=${Math.abs(uAcross(res, c, all)).toFixed(2)}V`
     else {
-      // Ω 档：表笔接电阻两端测阻值（高中用法：测前断电、单独测量，表内电池供电）
-      const ps = pins(c)
-      const target = all.find(e => e !== c && ['resistor', 'rheostat', 'bulb'].includes(e.type) &&
-        pins(e).every((q, k) => Math.hypot(q.x - ps[k === 0 ? 0 : 1].x, q.y - ps[k === 0 ? 0 : 1].y) < 14 ||
-                                   Math.hypot(q.x - ps[k === 0 ? 1 : 0].x, q.y - ps[k === 0 ? 1 : 0].y) < 14))
-      if (target) {
-        const tI = res?.currents.get(target.id) ?? 0
-        label = Math.abs(tI) > 1e-6 ? `R=${target.props.R}Ω（带电！请断电）` : `R=${target.props.R}Ω`
+      // Ω 档：表内电池 + 内阻，表笔接电阻两端测电流 → R = E/I − R内
+      // （高中用法：测前断电、单独测量；短接调零 R=0，表笔悬空则无电流）
+      const Im = res?.currents.get(c.id) ?? 0
+      if (Im && Math.abs(Im) > 1e-9) {
+        const Rm = OHM_BATTERY / Math.abs(Im) - OHM_RESISTOR
+        if (Rm < -0.5) label = '表笔反接或电路带电'
+        else label = `R=${Rm.toFixed(1)}Ω`
       } else label = '表笔接电阻两端'
     }
   }

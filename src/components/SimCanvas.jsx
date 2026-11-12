@@ -464,15 +464,16 @@ function drawFieldLines(ctx, o, scale, comps) {
   ctx.lineWidth = 1 / scale
   const Spt = { x: o.x - ux * len / 2, y: o.y - uy * len / 2 }
   for (let k = 0; k < nLines; k++) {
-    // 出射角：全扇形（含轴向正前方与两侧），轴向两条正是 N 极两端必有的磁感线
-    const spread = -Math.PI + (k / (nLines - 1)) * Math.PI * 2
+    // 出射角：朝向 S 极的半球（[90°,270°] 相对磁铁朝向）。背向 S 的正前方场线
+    // 是最外层磁感线，偶极场里绕得太远必然在途中衰减断掉，排除后磁感线才能全部回到 S 极。
+    const spread = Math.PI / 2 + (k / (nLines - 1)) * Math.PI
     let px = Npt.x + Math.cos(ang + spread) * 10
     let py = Npt.y + Math.sin(ang + spread) * 10
     ctx.beginPath(); ctx.moveTo(px, py)
     let hitS = false
     for (let step = 0; step < 260 && !hitS; step++) {
       const f = fieldAt(px, py, comps)
-      if (f.mag < 1e-3) break
+      if (f.mag < 1e-5) break
       const h = Math.min(6, 60 / (f.mag + 2))   // 自适应步长
       px += f.bx / f.mag * h
       py += f.by / f.mag * h
@@ -486,14 +487,14 @@ function drawFieldLines(ctx, o, scale, comps) {
   // 箭头：在场线中段画。简化：对每条线重走一遍到 1/3 位置画箭头
   ctx.fillStyle = 'rgba(148,163,184,.55)'
   for (let k = 0; k < nLines; k++) {
-    const spread = -Math.PI + (k / (nLines - 1)) * Math.PI * 2
+    const spread = Math.PI / 2 + (k / (nLines - 1)) * Math.PI
     let px = Npt.x + Math.cos(ang + spread) * 10
     let py = Npt.y + Math.sin(ang + spread) * 10
     let trav = 0, total = 0
     const pts = []
     for (let step = 0; step < 220; step++) {
       const f = fieldAt(px, py, comps)
-      if (f.mag < 1e-3) break
+      if (f.mag < 1e-5) break
       const h = Math.min(6, 60 / (f.mag + 2))
       const ddx = f.bx / f.mag * h, ddy = f.by / f.mag * h
       px += ddx; py += ddy; trav += h

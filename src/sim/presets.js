@@ -197,6 +197,10 @@ Object.assign(presets, {
     { type: 'block', x: 260, y: 480, props: { m: 1, mu: 0.5, v0x: 0, v0y: 0 } },
     { type: 'constantForce', x: 620, y: 430, props: { fx: -3, fy: 0 } },
   ],
+  倾斜传送带: [
+    { type: 'conveyor', x: 400, y: 420, props: { len: 400, v: 3, angle: 30 } },
+    { type: 'block', x: 238, y: 300, props: { m: 1, mu: 0.4, v0x: 0, v0y: 0 } },
+  ],
   竖直圆周运动: [
     { type: 'ball', x: 400, y: 200, props: { m: 0.5, r: 12, q: 0, v0x: 9, v0y: 0 } },
     { type: 'uniformB', x: 400, y: 330, props: { w: 520, h: 460, bz: 1.5 } },

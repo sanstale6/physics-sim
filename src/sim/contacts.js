@@ -50,12 +50,26 @@ export function frictionForce(o, objs) {
   const c = contactIncline(o, objs)
   if (c) {
     const a = c.a
+    const isBelt = c.geom?.isBelt === true
+    const belt = isBelt ? (c.inc.props.v ?? 0) : 0        // m/s，正=沿带面向下（右端）
     const N = m * G * Math.cos(a)
     const d = { x: Math.cos(a), y: Math.sin(a) }        // 沿斜面向下
     const vt = v.x * d.x + v.y * d.y
     const maxF = mu * N
     const drive = m * G * Math.sin(a) + ap.x * d.x + ap.y * d.y  // 切向驱动力（正=向下）
-    if (Math.abs(vt) > VT_EPS) {
+    if (isBelt) {
+      // 倾斜传送带：摩擦方向取「相对皮带」的速度，物块被带到带速
+      const vrel = vt * VEL - belt                      // m/s，正 = 物块比皮带快（向下）
+      if (Math.abs(vrel) > 0.02) {
+        f.x = -d.x * maxF * Math.sign(vrel)
+        f.y = -d.y * maxF * Math.sign(vrel)
+      } else {
+        const need = -drive                              // 顶住重力下滑所需
+        const mag = clamp(need, -maxF, maxF)
+        f.x = d.x * mag
+        f.y = d.y * mag
+      }
+    } else if (Math.abs(vt) > VT_EPS) {
       f.x = -d.x * maxF * Math.sign(vt)
       f.y = -d.y * maxF * Math.sign(vt)
     } else {

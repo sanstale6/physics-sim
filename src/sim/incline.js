@@ -38,21 +38,37 @@ function segDist(px, py, a, b) {
 // 物体是否贴在斜面表面：返回 { inc, a, geom } 或 null
 // 判据：刚体顶点在斜边平面法向上的投影必须「跨越」平面（允许少量嵌入），
 // 且圆心投影落在斜边线段范围内 —— 这样斜边以外、三角形内部都不会误判。
+// 倾斜传送带（conveyor 且 angle≠0）也走此函数：带面 = 中心线沿「上方法线」偏移半高。
 export function contactIncline(o, objs) {
   if (!o.body) return null
   const b = o.body
   const p = b.position
   for (const inc of objs) {
-    if (inc.type !== 'incline') continue
-    const g = inclineGeom(inc)
-    const [p0, p1] = g.hyp
+    let a, p0, p1, isBelt = false
+    if (inc.type === 'incline') {
+      const g = inclineGeom(inc)
+      a = g.a
+      p0 = g.hyp[0]
+      p1 = g.hyp[1]
+    } else if (inc.type === 'conveyor') {
+      const pr = inc.props || {}
+      a = (pr.angle ?? 0) * DEG
+      if (Math.abs(a) < 0.01) continue          // 水平传送带走 supportUnder
+      const L = pr.len ?? 320
+      const cos = Math.cos(a), sin = Math.sin(a)
+      const half = L / 2
+      const hh = 8                              // 带体半高（body h=16），带面 = 中心线上移 hh
+      p0 = { x: inc.x - half * cos + hh * sin, y: inc.y - half * sin - hh * cos }
+      p1 = { x: inc.x + half * cos + hh * sin, y: inc.y + half * sin - hh * cos }
+      isBelt = true
+    } else continue
     const dx = p1.x - p0.x, dy = p1.y - p0.y
     const L2 = dx * dx + dy * dy || 1
     const tRaw = ((p.x - p0.x) * dx + (p.y - p0.y) * dy) / L2
-    if (tRaw < -0.02 || tRaw > 1.02) continue          // 只认斜边正上方
+    if (tRaw < -0.02 || tRaw > 1.02) continue          // 只认带面正上方
     const t = Math.max(0, Math.min(1, tRaw))
     const q = { x: p0.x + dx * t, y: p0.y + dy * t }
-    const nx = Math.sin(g.a), ny = -Math.cos(g.a)     // 斜面外法线（朝左上）
+    const nx = Math.sin(a), ny = -Math.cos(a)     // 斜面外法线（朝左上）
     const vs = b.vertices || []
     let sMin = Infinity, sMax = -Infinity
     for (const v of vs) {
@@ -67,7 +83,7 @@ export function contactIncline(o, objs) {
     if (sMin > 10) continue                            // 整体悬在面上方
     if (sMax < -10) continue                           // 整体在面下方（三角形内部/地面）
     if (Math.hypot(p.x - q.x, p.y - q.y) > 120) continue
-    return { inc, a: g.a, geom: g }
+    return { inc, a, geom: { p0, p1, q, isBelt } }
   }
   return null
 }
