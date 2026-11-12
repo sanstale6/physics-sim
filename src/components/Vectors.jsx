@@ -1,6 +1,5 @@
 import { analyzeForces } from '../sim/analysis.js'
 // 力/速度矢量叠加层：在画布上为选中或全部动态刚体画 v、F
-import Matter from 'matter-js'
 import { drawArrow } from '../sim/registry.js'
 
 export function drawVectors(ctx, objs, opts) {

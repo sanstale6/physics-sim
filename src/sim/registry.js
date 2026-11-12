@@ -716,72 +716,6 @@ export const registry = {
       ctx.restore(); ctx.lineWidth = 1 * LW
     },
   },
-    spring: {
-    name: '弹簧',
-    defaults: () => ({ k: 50, restLen: 120 }),
-    fields: [
-      { key: 'k', label: '劲度系数 k', unit: 'N/m', min: 5, max: 500, step: 5 },
-      { key: 'restLen', label: '原长', unit: 'px', min: 40, max: 400, step: 10 },
-    ],
-    body: null,
-    force: (c, components) => pairForce(c, components, (d, p) => -p.k * ((d - p.restLen) / 100)),
-    overlay: (ctx, c, components) => drawSpring(ctx, c, components),
-  },
-  rope: {
-    name: '轻绳',
-    defaults: () => ({ len: 150 }),
-    fields: [{ key: 'len', label: '绳长', unit: 'px', min: 40, max: 500, step: 10 }],
-    body: null,
-    overlay: (ctx, c, components) => {
-      const ends = pairEnds(c, components); if (!ends) return
-      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.5 * LW
-      ctx.beginPath(); ctx.moveTo(ends[0].body.position.x, ends[0].body.position.y)
-      ctx.lineTo(ends[1].body.position.x, ends[1].body.position.y); ctx.stroke(); ctx.lineWidth = 1 * LW
-    },
-  },
-  pulley: {
-    name: '定滑轮',
-    defaults: () => ({ r: 22, len: 320 }),
-    fields: [
-      { key: 'r', label: '半径', unit: 'px', min: 10, max: 60, step: 2 },
-      { key: 'len', label: '绳总长', unit: 'px', min: 100, max: 800, step: 20 },
-    ],
-    body: (x, y, p) => ({ type: 'circle', r: p.r,
-      options: { isStatic: true, friction: 0 }, label: 'pulley' }),
-    // 跨过滑轮的绳：两端到滑轮距离之和 ≤ len（硬约束，见 sim/constraints.js）
-    overlay: (ctx, c, components) => {
-      const ends = pairEnds(c, components)
-      const rad = c.props.r ?? 22
-      ctx.save()
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-      // 绳（黄色，画在轮体下面）：从物体到轮缘
-      ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 1.6 * LW
-      if (ends) for (const end of ends) {
-        const b = end.body.position
-        const dx = b.x - c.x, dy = b.y - c.y, d = Math.hypot(dx, dy) || 1
-        ctx.beginPath(); ctx.moveTo(b.x, b.y)
-        ctx.lineTo(c.x + dx / d * rad, c.y + dy / d * rad); ctx.stroke()
-      }
-      // 轮体：深色填充轮 + 亮外圈 + 6 轮辐 + 大中心轴
-      ctx.beginPath(); ctx.arc(c.x, c.y, rad, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(7,11,18,.9)'; ctx.fill()
-      ctx.strokeStyle = 'rgba(219,230,245,.95)'; ctx.lineWidth = 1.6 * LW; ctx.stroke()
-      ctx.lineWidth = 1.1 * LW
-      ctx.strokeStyle = 'rgba(219,230,245,.55)'
-      ctx.beginPath(); ctx.arc(c.x, c.y, rad * 0.62, 0, Math.PI * 2); ctx.stroke()
-      for (let k = 0; k < 6; k++) {
-        const a2 = (k * Math.PI) / 3
-        ctx.beginPath()
-        ctx.moveTo(c.x + Math.cos(a2) * rad * 0.62, c.y + Math.sin(a2) * rad * 0.62)
-        ctx.lineTo(c.x + Math.cos(a2) * rad, c.y + Math.sin(a2) * rad); ctx.stroke()
-      }
-      ctx.beginPath(); ctx.arc(c.x, c.y, 4, 0, 7)
-      ctx.fillStyle = '#38bdf8'; ctx.fill()
-      ctx.strokeStyle = 'rgba(56,189,248,.5)'; ctx.lineWidth = 1 * LW
-      ctx.beginPath(); ctx.arc(c.x, c.y, rad + 4, 0, Math.PI * 2); ctx.stroke()
-      ctx.restore(); ctx.lineWidth = 1 * LW
-    },
-  },
   magnet: {
     name: '条形磁铁',
     defaults: () => ({ len: 120, strength: 5, angle: 0 }),
@@ -908,7 +842,6 @@ export const registry = {
     body: null,
     overlay: (ctx, c) => {
       const { ex, ey } = c.props
-      const inf = c.props.w >= 3200 || c.props.h >= 3200
       const cw = ctx.canvas.width, ch = ctx.canvas.height
       const w = c.props.w >= 3200 ? cw * 3 : c.props.w
       const h = c.props.h >= 3200 ? ch * 3 : c.props.h
@@ -1148,13 +1081,9 @@ function drawCircuit(ctx, c, all) {
 }
 
 function uAcross(res, c, all) {
-  const p = c.props, len = p.len ?? 90
-  const ang = ((p.angle ?? 0) * Math.PI) / 180
-  const dx = (Math.cos(ang) * len) / 2, dy = (Math.sin(ang) * len) / 2
-  // 用电表两端端子所在节点求电压差（solve 已聚过类，这里用端子坐标重新映射）
+  // 用电表两端端子所在节点求电压差（solve 已聚过类，这里直接用节点索引）
   void all
   const va = res.V[res.nodeOf.get(c.id)?.a ?? 0] ?? 0
   const vb = res.V[res.nodeOf.get(c.id)?.b ?? 0] ?? 0
   return va - vb
-  void dx; void dy
 }

@@ -377,11 +377,27 @@ export function useSim() {
             const vpx = Math.cos(a) * (g.props.v ?? 5) / VEL_SCALE, vpy = Math.sin(a) * (g.props.v ?? 5) / VEL_SCALE
             const born = sp('charge', px, py, { q: g.props.q ?? -1, m: g.props.m ?? 0.5, r: 8, v0x: 0, v0y: 0 })
             if (born?.body) {
+              born._gunBorn = true   // 标记为电子枪发射：便于超限清理（不误删手动放置的电荷）
               Matter.Body.setVelocity(born.body, { x: vpx, y: vpy })
               // spawn 只建 matter 体不进 objsRef（那是 add 的职责）；枪发射的粒子
               // 必须入列表才会被渲染/受力，否则用户完全看不到「射出」
               objsRef.current = [...objsRef.current, born]
               setCount(objsRef.current.length)
+              // 电子枪粒子超限清理：库仑力是 O(n²)，长时间发射会卡死；超限移除最老的
+              const MAX_GUN_CHARGES = 400
+              const gunCharges = objsRef.current.filter(o => o.type === 'charge' && o._gunBorn)
+              if (gunCharges.length > MAX_GUN_CHARGES) {
+                const doomed = new Set(gunCharges.slice(0, gunCharges.length - MAX_GUN_CHARGES).map(o => o.id))
+                const engine = engineRef.current
+                objsRef.current = objsRef.current.filter(o => {
+                  if (doomed.has(o.id)) {
+                    if (o.body && engine) Matter.Composite.remove(engine.world, o.body)
+                    return false
+                  }
+                  return true
+                })
+                setCount(objsRef.current.length)
+              }
             }
           }
         }

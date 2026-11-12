@@ -1,5 +1,4 @@
 import { useRef } from 'react'
-import { registry } from '../sim/registry.js'
 import { buildShareUrl } from '../sim/share.js'
 
 const KEY = 'physics-sim-scenes'

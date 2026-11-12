@@ -48,6 +48,13 @@ export function applyForces(components) {
   const forces = components.filter(c => c.type === 'constantForce')
   const charges = components.filter(c => c.body && (c.props.q ?? (c.type === 'charge' ? 1 : 0)) !== 0)
   const fields = components.filter(c => c.type === 'uniformB' || c.type === 'uniformE')
+  // 一次性分类，避免在电荷主循环内反复全量遍历 components（N 电荷 × M 元件 的三重嵌套）
+  const platesList = components.filter(c => c.type === 'plates')
+  const staticBodies = components.filter(c => c.body && c.body.isStatic && c.type !== 'charge')
+  const cyclotrons = components.filter(c => c.type === 'cyclotron')
+  const magnets = components.filter(c => c.type === 'magnet')
+  const rods = components.filter(c => c.type === 'metalRod' && c.body)
+  const caps = components.filter(c => c.type === 'capacitor')
 
   // 恒力：作用在最近的物块/小球上（超出 260px 视为未连接）
   for (const f of forces) {
@@ -64,6 +71,9 @@ export function applyForces(components) {
     for (let j = i + 1; j < charges.length; j++) {
       const a = charges[i].body, b = charges[j].body
       const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y
+      // 距离截断：相距 > 8m（800px）时库仑力 < k·q²/64 ≈ 0.016N（对 m=0.5kg 的电荷
+      // 加速度 < 0.03 m/s²），教学精度下可忽略。用矩形（Chebyshev）快速判断跳过 hypot。
+      if (Math.abs(dx) > 800 || Math.abs(dy) > 800) continue
       const rPx = Math.max(Math.hypot(dx, dy), 20)
       const r = rPx / SCALE
       const F = K * charges[i].props.q * uC * charges[j].props.q * uC / (r * r) // N
@@ -96,8 +106,7 @@ export function applyForces(components) {
       eax += (q * p.ex) / m
       eay += (-q * p.ey) / m
     }
-    for (const f of components) {
-      if (f.type !== 'plates') continue
+    for (const f of platesList) {
       const p = f.props
       const qq = c.props.q * uC
       const a = ((p.angle ?? 0) * Math.PI) / 180
@@ -192,8 +201,7 @@ export function applyForces(components) {
     }
     // 感光屏/感光板钉住：带电粒子撞上静态板（track/block 等）后原地钉住（模拟感光屏记录位置），
     // 避免 matter solver 与解析圆周的 positionPrev 操控冲突产生 NaN
-    for (const f of components) {
-      if (!f.body || !f.body.isStatic || f.type === 'charge') continue
+    for (const f of staticBodies) {
       const dx = Math.abs(body.position.x - f.body.position.x)
       const dy = Math.abs(body.position.y - f.body.position.y)
       const bw = (f.body.bounds.max.x - f.body.bounds.min.x) / 2 + c.props.r
@@ -210,8 +218,7 @@ export function applyForces(components) {
     //  - 每穿过一次水平缝隙（极角跨过 0 或 π）动能增加 qU → v'=√(v²+2qU/m)、r'=v'/ω
     //  - 圆心始终是加速器中心（真实机器圆心会缓慢漂移，教学图里要的是同心半圆）
     //  - r ≥ R 时离开磁场，沿当前速度直线飞出
-    for (const cy of components) {
-      if (cy.type !== 'cyclotron') continue
+    for (const cy of cyclotrons) {
       const R = cy.props.R ?? 160, B = cy.props.B ?? 0.5, U = cy.props.U ?? 5
       const q = c.props.q * uC
       const wAbs = Math.abs((q * B) / m)          // rad/s
@@ -265,7 +272,6 @@ export function applyForces(components) {
   // —— 金属棒切割磁感线（电磁感应 + 楞次定律）——
   // 感应电动势 ε = B·L·(vx sinθ − vy cosθ)（与电荷洛伦兹力同一 B 符号约定）；
   // 安培力 F = I·L·(û × B)，方向由上式符号自动保证「阻碍相对运动」（楞次定律）。
-  const rods = components.filter(c => c.type === 'metalRod' && c.body)
   if (rods.length) {
     for (const rod of rods) {
       const b = rod.body
@@ -303,7 +309,6 @@ export function applyForces(components) {
   // 电容是储能元件：每个物理步用节点电压法求瞬时电流 Ic，再积分电容电压
   //   dU/dt = −Ic / C_eff   （Ic 正方向 a→b，即从 + 端 b 流出 = 放电）
   // C 单位 μF，内部放大 1000 倍（CAP_TC_SCALE）让 RC 时间常数 τ=RC 落在秒级、肉眼可见。
-  const caps = components.filter(c => c.type === 'capacitor')
   if (caps.length) {
     const res = solve(components)
     if (res?.currents) {
@@ -318,8 +323,7 @@ export function applyForces(components) {
   }
 
   // 条形磁铁：对带电运动电荷的简化演示力——F ∝ s·q·v/r²，方向为速度旋转 90°（N 极逆时针/S 极顺时针）
-  for (const mg of components) {
-    if (mg.type !== 'magnet') continue
+  for (const mg of magnets) {
     const len = mg.props.len ?? 120, a = ((mg.props.angle ?? 0) * Math.PI) / 180
     const ux = Math.cos(a), uy = Math.sin(a)
     const poles = [
