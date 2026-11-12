@@ -173,6 +173,15 @@ Object.assign(presets, {
     { type: 'metalRod', x: 400, y: 300, props: { len: 200, R: 2, m: 0.5, angle: 90, v0x: 3 } },
     { type: 'uniformB', x: 500, y: 300, props: { w: 640, h: 300, bz: 1 } },
   ],
+  // 安培力（通电导线）：外接电源使静止杆通电，受 F=BIL 加速（电→力）；
+  // 加速后杆切割磁感线产生反电动势 ε=BLv，电流减小，最终匀速 v=E/(BL)=6/4=1.5m/s（电磁炮/导轨）
+  安培力通电导线: [
+    { type: 'wire', x: 480, y: 200, props: { len: 640, angle: 0 } },
+    { type: 'wire', x: 480, y: 400, props: { len: 640, angle: 0 } },
+    { type: 'battery', x: 160, y: 300, props: { E: 6, r: 0.5, len: 200, angle: 90 } },
+    { type: 'metalRod', x: 400, y: 300, props: { len: 200, R: 2, m: 0.5, angle: 90 } },
+    { type: 'uniformB', x: 480, y: 300, props: { w: 640, h: 300, bz: 2 } },
+  ],
   小磁针指北: [
     { type: 'compass', x: 300, y: 300, props: { len: 48 } },
     { type: 'magnet', x: 480, y: 300, props: { len: 140, strength: 8, angle: 0 } },

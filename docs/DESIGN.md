@@ -212,3 +212,11 @@ Inspector 据此生成滑条/数字框，避免硬编码。
 - 失重实现：matter 0.19 无 body.gravityScale，全局重力施加到每个非静态体，故用「反向力抵消」——统一失重段对所有 `props.g===0` 的 body 施加 `-mass*GRAV.y*GRAV.scale`；ball 的 g 字段控制（g=0 同时 body 加 frictionAir:0 模拟真空）
 - 圆轨道验证：v=√(GM/r) 时 symplectic Euler 半隐式积分对向心力漂移 ±5px/200 步内，可接受，无需像 B 场那样解析积分
 - 新增预设「行星圆周运动」「椭圆轨道」+ scripts/gravity.mjs 6 断言（圆轨道半径稳定、速率恒定、椭圆远/近地点符合 v<v_circ 的椭圆）
+
+## 20. 第 20 轮：交互与电路修正 + 安培力
+- 恒力（constantForce）语义从「每帧就近吸附」改为「持久绑定」：`_target` 一旦确定不重算，目标删除/失效或用户拖走恒力时才重新绑定；overlay 箭头跟随目标刚体，虚线表绑定关系
+- 点电荷 mask:0 无碰撞：电荷与极板/感光屏的交互本就走 engine 手动几何检测，关闭 matter 碰撞只消除「点电荷之间、点电荷与块」的推挤，不影响任何教学演示
+- 万有引力源（gravity）无刚体，必须在引力段内做「坠入恒星半径内吸收」处理，否则物体会穿过恒星飞走（软化 rPx=max(hypot,20) 是数值防爆手段，不是物理边界）
+- metalRod 是「无 E 字段的电动势源」：solve 的 E 默认值 `??3` 只对 battery 成立，对 metalRod 必须 `_eInst ?? 0`（静止 ε=0）；否则 Inspector 渲染（solve 先于 applyForces）时静止杆被当 3V 电源
+- 多用电表 mode 用数字 0/1/2 而非字符串（Inspector 的 number+range 控件只吃数字）；「带电测电阻」提示靠检查被测电阻的 currents 是否非零
+- 新增安培力演示（电动机/电磁炮方向）：通电金属棒在匀强磁场中受 F=BIL 加速，反电动势 ε=BLv 随速度增大抵消电源电动势，终速 v=E/(BL)

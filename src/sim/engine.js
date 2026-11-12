@@ -56,10 +56,14 @@ export function applyForces(components) {
   const rods = components.filter(c => c.type === 'metalRod' && c.body)
   const caps = components.filter(c => c.type === 'capacitor')
 
-  // 恒力：作用在最近的物块/小球上（超出 260px 视为未连接）
+  // 恒力：绑定到「放置时最近」的物块/小球，之后持续作用在它身上（目标删除/失效才重新绑定）。
+  // 关键：_target 一旦确定就不重算，避免物体移动后恒力跳去吸另一个更近的物体。
   for (const f of forces) {
-    const t = nearestTarget(f, components)
-    f._target = t ? t.id : null
+    let t = components.find(o => o.id === f._target)
+    if (!t || !t.body || t.body.isStatic) {
+      t = nearestTarget(f, components)
+      f._target = t ? t.id : null
+    }
     if (t) Matter.Body.applyForce(t.body, t.body.position, { x: f.props.fx * FORCE_SCALE, y: -f.props.fy * FORCE_SCALE })
   }
 
@@ -96,12 +100,22 @@ export function applyForces(components) {
   const gravs = components.filter(c => c.type === 'gravity')
   for (const g of gravs) {
     const GM = (g.props.G ?? 1) * (g.props.M ?? 120)   // N·m²/kg（教学值）
+    const R = g.props.r ?? 26                          // 恒星视觉半径
     for (const c of components) {
       if (c === g || !c.body || c.body.isStatic || c.type === 'gravity') continue
       const m = c.props.m ?? 0
       if (m <= 0) continue
       const dx = g.x - c.body.position.x, dy = g.y - c.body.position.y
-      const rPx = Math.max(Math.hypot(dx, dy), 20)      // 软化：避免 r→0 时力爆炸
+      const dist = Math.hypot(dx, dy)
+      // 坠入恒星：被吸收（停在表面、速度清零），防止穿过恒星后飞走。用户仍可拖走救回（物体保持动态）。
+      if (dist < R) {
+        const ux = dx / (dist || 1), uy = dy / (dist || 1)
+        Matter.Body.setVelocity(c.body, { x: 0, y: 0 })
+        Matter.Body.setPosition(c.body, { x: g.x + ux * R, y: g.y + uy * R }, false)
+        c.body.positionPrev = { x: c.body.position.x, y: c.body.position.y }
+        continue
+      }
+      const rPx = Math.max(dist, 20)      // 软化：避免 r→0 时力爆炸
       const r = rPx / SCALE
       const F = GM * m / (r * r)                        // N
       const Fm = F * FORCE_SCALE

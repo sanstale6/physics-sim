@@ -263,6 +263,8 @@ export function useSim() {
       }
     }
     const ox = o.x, oy = o.y
+    // 恒力：拖到新位置后解除旧绑定，下一帧按「最近物体」重新绑定（跟随新的受力对象）
+    if (o.type === 'constantForce') delete o._target
     o.x = x; o.y = y
     o.home = { x, y, angle: o.home?.angle ?? 0 }   // 拖到新位置后，重置就回到这里
     // 并联态跟随：移动某个元件后，把「两端吸附在该元件端子附近」的并联态元件的 a1/a2 同步平移

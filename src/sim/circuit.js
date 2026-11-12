@@ -225,7 +225,8 @@ export function solve(objs) {
       G[a][a] += g; G[nb][nb] += g; G[a][nb] -= g; G[nb][a] -= g
       const E = e.type === 'plates' ? (e.props.U ?? 0)
         : e.type === 'capacitor' ? (e.props.U ?? 0)   // 电容两端电压（engine 每步积分 Q 后写入）
-          : (e.props._eInst ?? e.props.E ?? 3)
+          : e.type === 'metalRod' ? (e.props._eInst ?? 0)   // 感应电动势（无外接 E，静止=0）
+            : (e.props._eInst ?? e.props.E ?? 3)
       I[nb] += E * g; I[a] -= E * g
     } else {
       const g = 1 / resistance(e)
@@ -264,7 +265,8 @@ export function solve(objs) {
             : Math.max(0.01, e.props.r ?? 0.5)
       const E0 = e.type === 'plates' ? (e.props.U ?? 0)
         : e.type === 'capacitor' ? (e.props.U ?? 0)
-          : (e.props._eInst ?? e.props.E ?? 3)
+          : e.type === 'metalRod' ? (e.props._eInst ?? 0)   // 感应电动势（无外接 E，静止=0）
+            : (e.props._eInst ?? e.props.E ?? 3)
       currents.set(e.id, (V[a] - V[nb] + E0) / r0)
     }
     else currents.set(e.id, (V[a] - V[nb]) / resistance(e))

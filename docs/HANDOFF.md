@@ -101,6 +101,16 @@ pnpm test           # 全链回归（14 个脚本，见下）
 - 预设：行星圆周运动、椭圆轨道；scripts/gravity.mjs（6 断言：圆轨道半径 294.5-305px 稳定、速率 6.22-6.44 恒定、椭圆远地点 300.1/近地点 75.9）
 - 教训：metalRod 原有的 g=0 重力抵消与统一失重段**重复施力**（force 累加导致棒向上漂移），已删金属棒段内抵消逻辑
 
+## 交互与电路修正 + 安培力（第 20 轮）
+- 关对账：src/App.jsx 删 import MomentumPanel 与 `<MomentumPanel/>` 渲染（MomentumPanel.jsx 文件保留未删）
+- 恒力持久绑定：engine.js 恒力段从「每帧 nearestTarget 重算」改为「`_target` 一旦确定不重算，目标失效/拖走才重新绑定」；useSim dragTo 里 `constantForce` 拖拽时 `delete o._target`；registry overlay 箭头+标注画在目标 body.position（跟随目标），虚线从元件连到目标
+- 万有引力吸收：坠入恒星半径（`g.props.r ?? 26`）内时 setVelocity(0)+setPosition(停在表面)+continue，修穿心飞走 bug（原软化 rPx=max(hypot,20) 让物体穿过无碰撞体的恒星）
+- 点电荷无碰撞：registry.js charge body options 改 `collisionFilter:{mask:0}`（删无效 gravityScale:0）——电荷失重本靠 engine 手动反向力，极板附着/感光屏钉住是 engine 手动几何检测，均不依赖 matter 碰撞
+- 多用电表重做（真实还原高中实验用法）：mode 从字符串 'A' 改数字 0/1/2（Inspector 只支持 number+range，不支持 options 下拉）；drawCircuit 重画真实表盘（方形外壳+弧形刻度+红色指针按读数偏转 A满量程1A/V满量程10V/Ω满量程100Ω+档位字母+红黑表笔）；Ω 档接电阻显示 `R=XXΩ`，带电时 `R=XXΩ（带电！请断电）`，未接显示「表笔接电阻两端」
+- **metalRod 电动势默认值 bug 修复**：circuit.js solve 两处（G/I 构建 + currents 回算）原用 `(e.props._eInst ?? e.props.E ?? 3)`，metalRod 无 E 字段 → `_eInst` undefined 时 E 落到 3 而非 0（静止杆被当 3V 电压源，I 错 1.2A 而非 2.4A）。已加 metalRod 分支 `(e.props._eInst ?? 0)`
+- 新增预设「安培力通电导线」（电磁炮/导轨）：battery(E6,r0.5)+wire×2(len640)+metalRod(R2,angle90)+uniformB(bz2)；初始 I=6/2.5=2.4A、F=BIL=9.6N 加速、终速 v=E/(BL)=1.5m/s 反电动势平衡；scripts/ampere.mjs 6 断言全过
+- 电路接线：battery 端子必须精确重合 wire 端点（≤12px 容差），「端子压线段中段」规则只对 metalRod 开放
+
 ## 已知遗留 / 下一步建议
 - ~~磁铁调角度时可能与极性标注分离~~ 已修复：useSim.js 重建刚体时静态元件 setAngle 被清零，已统一传 ang
 - ~~电压表内接/外接误差演示、电桥、变阻器分压接法：未做~~ 已完成：4 个新预设（电压表外接/内接、惠斯通电桥、变阻器分压）+ scripts/circuits2.mjs 15 断言（外接 Iv=5.85e-6、电桥平衡 Ig=0/失衡 Ig=0.0346、分压 I载=0.1935）

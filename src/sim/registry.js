@@ -356,17 +356,19 @@ export const registry = {
     body: null,
     overlay: (ctx, c, all) => {
       const { fx, fy } = c.props
-      // 到受力物体的虚线（表示力作用在谁身上）
+      // 恒力绑定到物体后：箭头 + 标注跟随目标移动（力作用在物体身上），虚线从元件连到目标表示绑定关系
       const t = c._target != null ? all.find(o => o.id === c._target) : null
+      const ax = t?.body ? t.body.position.x : c.x
+      const ay = t?.body ? t.body.position.y : c.y
       if (t?.body) {
         ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(255,95,86,.45)'; ctx.lineWidth = 1 * LW
-        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(t.body.position.x, t.body.position.y); ctx.stroke(); ctx.restore()
+        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(ax, ay); ctx.stroke(); ctx.restore()
       }
       const mag = Math.hypot(fx, fy) || 1
       const L = 26 + Math.min(46, mag * 1.6)
-      drawArrow(ctx, { x: c.x, y: c.y }, { x: c.x + fx / mag * L, y: c.y - fy / mag * L }, '#ff5f56')
+      drawArrow(ctx, { x: ax, y: ay }, { x: ax + fx / mag * L, y: ay - fy / mag * L }, '#ff5f56')
       ctx.fillStyle = '#ff8b84'; ctx.font = '11px system-ui'; ctx.textAlign = 'center'
-      ctx.fillText('F=' + mag.toFixed(0) + 'N', c.x, c.y + 20)
+      ctx.fillText('F=' + mag.toFixed(0) + 'N', ax, ay + 20)
     },
   },
   gravity: {
@@ -406,7 +408,7 @@ export const registry = {
     ],
     // 带电粒子默认忽略重力（高中题：「不计重力」）；frictionAir 必须为 0，
     // 否则 Matter 默认 0.01 会让 B 圆周/速度选择器里的粒子能量持续泄漏（实测每步 -0.6%）
-    body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0, frictionAir: 0, gravityScale: 0 }, label: 'charge' }),
+    body: (x, y, p) => ({ type: 'circle', r: p.r, options: { density: 0.001, friction: 0, frictionAir: 0, collisionFilter: { mask: 0 } }, label: 'charge' }),
   },
   uniformB: {
     name: '匀强磁场 B',
@@ -646,9 +648,9 @@ export const registry = {
   },
   multimeter: {
     name: '多用电表',
-    defaults: () => ({ mode: 'A', len: 90, angle: 0 }),
+    defaults: () => ({ mode: 0, len: 90, angle: 0 }),
     fields: [
-      { key: 'mode', label: '档位', unit: '', min: 0, max: 0, step: 1, options: ['A（直流电流）', 'V（直流电压）', 'Ω（电阻）'] },
+      { key: 'mode', label: '档位（0=电流A 1=电压V 2=电阻Ω）', unit: '', min: 0, max: 2, step: 1 },
       { key: 'len', label: '长度', unit: 'px', min: 40, max: 300, step: 10 },
       { key: 'angle', label: '方向', unit: '°', min: 0, max: 270, step: 90 },
     ],
@@ -1014,11 +1016,39 @@ function drawCircuit(ctx, c, all) {
     case 'ammeter':
     case 'voltmeter':
     case 'multimeter': {
-      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2 * LW
-      ctx.beginPath(); ctx.arc(0, 0, 13, 0, 7); ctx.stroke()
-      ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      const mchar = c.type === 'multimeter' ? ['A','V','Ω'][Math.round(p.mode ?? 0)] : (c.type === 'ammeter' ? 'A' : 'V')
-      ctx.fillText(mchar, 0, 1)
+      const mode = ['A', 'V', 'Ω'][Math.round(p.mode ?? 0)]
+      // 真实万用表：方形表盘 + 弧形刻度 + 指针 + 红黑表笔（红进黑出）
+      ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.5 * LW
+      ctx.strokeRect(-14, -12, 28, 24)
+      // 弧形刻度 + 刻度线
+      ctx.beginPath(); ctx.arc(0, -2, 8, -Math.PI * 0.8, -Math.PI * 0.2); ctx.stroke()
+      ctx.lineWidth = 1 * LW
+      for (let i = 0; i <= 5; i++) {
+        const a = -Math.PI * 0.8 + (i / 5) * Math.PI * 0.6
+        ctx.beginPath()
+        ctx.moveTo(Math.cos(a) * 6, -2 + Math.sin(a) * 6)
+        ctx.lineTo(Math.cos(a) * 8, -2 + Math.sin(a) * 8); ctx.stroke()
+      }
+      // 读数 → 指针偏转
+      let frac = 0
+      if (mode === 'A') frac = Math.min(1, Math.abs(I) / 1)                 // 满量程 1A
+      else if (mode === 'V') frac = Math.min(1, Math.abs(uAcross(res, c, all)) / 10)  // 满量程 10V
+      else {
+        const ps = pins(c)
+        const target = all.find(e => e !== c && ['resistor', 'rheostat', 'bulb'].includes(e.type) &&
+          pins(e).every((q, k) => Math.hypot(q.x - ps[k === 0 ? 0 : 1].x, q.y - ps[k === 0 ? 0 : 1].y) < 14 ||
+                                     Math.hypot(q.x - ps[k === 0 ? 1 : 0].x, q.y - ps[k === 0 ? 1 : 0].y) < 14))
+        if (target) frac = Math.min(1, (target.props.R ?? 0) / 100)         // 满量程 100Ω
+      }
+      const pa = -Math.PI * 0.8 + frac * Math.PI * 0.6
+      ctx.strokeStyle = '#ff5f56'; ctx.lineWidth = 1.5 * LW
+      ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(Math.cos(pa) * 7, -2 + Math.sin(pa) * 7); ctx.stroke()
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(0, -2, 1.5, 0, 7); ctx.fill()
+      ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(mode, 0, 10)
+      // 红黑表笔（b 端红 +、a 端黑 −）
+      ctx.fillStyle = '#ff5f56'; ctx.beginPath(); ctx.arc(L, 0, 3.5, 0, 7); ctx.fill()
+      ctx.fillStyle = '#6b7280'; ctx.beginPath(); ctx.arc(-L, 0, 3.5, 0, 7); ctx.fill()
       break
     }
     case 'diode': {
@@ -1089,12 +1119,15 @@ function drawCircuit(ctx, c, all) {
     if (mode === 'A') label = `I=${Math.abs(I).toFixed(3)}A`
     else if (mode === 'V') label = `U=${Math.abs(uAcross(res, c, all)).toFixed(2)}V`
     else {
-      // Ω 档：表笔接在电阻类元件两端时显示其标称阻值（高中用法：测前断电、单独测量）
+      // Ω 档：表笔接电阻两端测阻值（高中用法：测前断电、单独测量，表内电池供电）
       const ps = pins(c)
       const target = all.find(e => e !== c && ['resistor', 'rheostat', 'bulb'].includes(e.type) &&
         pins(e).every((q, k) => Math.hypot(q.x - ps[k === 0 ? 0 : 1].x, q.y - ps[k === 0 ? 0 : 1].y) < 14 ||
                                    Math.hypot(q.x - ps[k === 0 ? 1 : 0].x, q.y - ps[k === 0 ? 1 : 0].y) < 14))
-      label = target ? `R=${target.props.R}Ω` : '---'
+      if (target) {
+        const tI = res?.currents.get(target.id) ?? 0
+        label = Math.abs(tI) > 1e-6 ? `R=${target.props.R}Ω（带电！请断电）` : `R=${target.props.R}Ω`
+      } else label = '表笔接电阻两端'
     }
   }
   if (label) {

@@ -6,7 +6,6 @@ import Toolbar from './components/Toolbar.jsx'
 import StatusBar from './components/StatusBar.jsx'
 import SceneIO from './components/SceneIO.jsx'
 import DataPanel from './components/DataPanel.jsx'
-import MomentumPanel from './components/MomentumPanel.jsx'
 import Help from './components/Help.jsx'
 import { useSim } from './hooks/useSim.js'
 import { presets } from './sim/presets.js'
@@ -144,7 +143,6 @@ export default function App() {
             onSelectEmpty={() => setShowInspector(false)}
             selectedId={selected} showForces={showForces} showB={showB} />
           <DataPanel body={selBody} time={sim.time} running={sim.running} />
-          <MomentumPanel objs={sim.objsRef.current} running={sim.running} tick={sim.tick} />
         </div>
           {showInspector && <button className="backdrop" aria-label="关闭属性面板" onClick={() => setShowInspector(false)} />}
         <Inspector object={sel} onChange={(k, v) => sim.update(selected, k, v)}
