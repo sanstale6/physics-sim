@@ -222,6 +222,7 @@ export default function SimCanvas(props) {
           P.current.onTap?.(tapObj.id)
         }
       }
+      if (movedByDrag) P.current.sim.endDrag?.()   // 拖拽手势结束：下一次拖动重新记撤销点
       objDrag = null; pan = null; tapObj = null; mode = 'idle'
       if (touch) hoverRef.current = null
       cv.style.cursor = P.current.tool !== 'select' ? 'crosshair' : 'grab'

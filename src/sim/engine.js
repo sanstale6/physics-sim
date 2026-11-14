@@ -406,6 +406,37 @@ export function nearestTarget(f, components) {
   return best
 }
 
+// —— 重置场景时的运行时状态清理 ——
+// 「⟲ 重置」的语义是「回到初始条件」，但模拟过程中会在 props / body 上累积一堆运行时状态：
+//   props._Q / props.U（极板电荷、电容电压）、props._eInst（交流瞬时电动势 / 金属棒 ε）、
+//   props._amp（安培力）、body._attached（电荷附着在极板上，且被 setStatic 钉死）、
+//   body._photographed（电荷钉在感光屏上，同样 setStatic）、body._cyc/_cycOut/_eKick/_gunBorn、
+//   电子枪 _t、恒力/单摆 _target、回旋加速器 _crossings
+// 不清理的话重置后：电容还带着电压、附着在板上的电荷仍是 static（永久卡死不动）、
+// 回旋加速器粒子还停在上一轮的盒外……所以重置前必须走一遍。
+const KEEP_KEYS = new Set(['_par', '_a', '_b'])   // 摆放结构（并联态、绳/弹簧两端），重置要保留
+export function resetRuntime(components) {
+  for (const c of components) {
+    // 元件对象自身的运行时字段：电子枪计时 _t、恒力/单摆绑定 _target、回旋穿缝计数 _crossings
+    for (const k of Object.keys(c)) {
+      if (k.charCodeAt(0) === 95 && !KEEP_KEYS.has(k)) delete c[k]   // 95 = '_'
+    }
+    const p = c.props || {}
+    for (const k of Object.keys(p)) {
+      if (k.charCodeAt(0) === 95 && !KEEP_KEYS.has(k)) delete p[k]   // 95 = '_'
+    }
+    // U：极板是用户参数（恢复到放置时的值）；电容器是积分出来的电压（清掉）
+    if (c.init && 'U' in c.init) p.U = c.init.U
+    else if ('U' in p) delete p.U
+    const b = c.body
+    if (!b) continue
+    delete b._attached; delete b._photographed
+    delete b._cyc; delete b._cycOut; delete b._eKick; delete b._gunBorn
+    // 被引擎 setStatic 钉住的电荷解除钉住，否则重置后位置回去了却永远不再运动
+    if (c.type === 'charge' && b.isStatic) Matter.Body.setStatic(b, false)
+  }
+}
+
 // 每步 Matter.Engine.update 之后调用：轻绳/滑轮等硬约束的位置投影
 export function postStep(components) {
   enforceConstraints(components)

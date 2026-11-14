@@ -97,8 +97,19 @@ button.block-btn{width:100%;margin-top:.6rem}
   background:linear-gradient(180deg,rgba(11,18,32,.9),rgba(16,23,36,.96));
   border-top:1px solid var(--line);backdrop-filter:blur(12px);position:relative;z-index:20;flex:none;
 }
+.pal-tabs{display:flex;gap:.3rem;flex:none;align-items:center}
+.pal-tab{
+  min-height:34px;padding:.2rem .6rem;font-size:.78rem;border-radius:9px;
+  background:rgba(30,41,59,.5);color:var(--muted);border:1px solid transparent;
+}
+.pal-tab:hover{color:var(--fg)}
+.pal-tab.active{
+  background:var(--accent-soft);color:var(--accent);font-weight:650;
+  border-color:rgba(56,189,248,.45);box-shadow:0 0 0 1px rgba(56,189,248,.16) inset;
+}
 .pal-scroll{display:flex;gap:.6rem;align-items:center;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;
   scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:1px}
+.pal-group.hidden{display:none}
 .pal-scroll::-webkit-scrollbar{display:none}
 .pal-group{display:flex;gap:.25rem;align-items:center;flex:none}
 .pal-group + .pal-group{padding-left:.55rem;border-left:1px solid var(--line)}
@@ -158,6 +169,12 @@ button.block-btn{width:100%;margin-top:.6rem}
 /* ——— 抽屉遮罩 ——— */
 .backdrop{display:none;position:absolute;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(2px);z-index:50;border:0;padding:0;min-height:0;border-radius:0;animation:fade .18s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* 宽屏：分类 tab 意义不大，直接平铺全部元件（横向滚动兜底） */
+@media (min-width:1100px){
+  .pal-tabs{display:none}
+  .pal-group.hidden{display:flex}
+}
 
 /* ——— 平板 / 手机 ——— */
 @media (max-width:900px){
@@ -222,6 +239,24 @@ button.block-btn{width:100%;margin-top:.6rem}
 .helpbox td{padding:.4rem .5rem;color:var(--muted);border-bottom:1px solid var(--line)}
 .helptip{font-size:.75rem;color:var(--faint);margin:.8rem 0}
 .helpbox button{width:100%}
+
+/* 显示选项弹出面板 */
+.disp-wrap{position:relative;display:inline-flex}
+.disp-menu{
+  position:absolute;right:0;top:calc(100% + 6px);z-index:80;width:232px;
+  display:flex;flex-direction:column;gap:.1rem;padding:.4rem;
+  border-radius:12px;border:1px solid var(--line-strong);
+  background:linear-gradient(180deg,rgba(17,24,39,.98),rgba(9,14,26,.98));
+  box-shadow:0 18px 44px rgba(2,6,23,.72);animation:toastin .14s ease-out;
+}
+.disp-row{
+  display:flex;align-items:center;gap:.55rem;padding:.45rem .5rem;border-radius:9px;cursor:pointer;
+  font-size:.82rem;color:var(--fg);
+}
+.disp-row:hover{background:rgba(56,189,248,.10)}
+.disp-row input[type=checkbox]{width:16px;height:16px;min-height:0;accent-color:var(--accent);flex:none;margin:0}
+.disp-row span{display:flex;flex-direction:column;line-height:1.25}
+.disp-row small{color:var(--faint);font-size:.68rem;font-weight:400}
 
 /* 速度倍率选择 */
 .toolbar .speed{display:inline-flex;align-items:center;gap:.25rem;padding:0 .35rem 0 .5rem;

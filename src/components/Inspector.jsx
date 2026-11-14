@@ -37,7 +37,7 @@ export default function Inspector({ object, onChange, onDelete, open, onClose, b
             onChange={(e) => setField(f.key, parseFloat(e.target.value))} />
         </div>
       ))}
-      {ROTATABLE.has(object.type) && (
+      {ROTATABLE.has(object.type) && !fields.some(f => f.key === 'angle') && (
         <div className="field">
           <label>
             <span className="fl">旋转 (°)</span>

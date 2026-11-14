@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Matter from 'matter-js'
-import { createWorld, applyForces, postStep, VEL_SCALE, GRAV, gravityState, coulombState } from '../sim/engine.js'
+import { createWorld, applyForces, postStep, resetRuntime, VEL_SCALE, GRAV, gravityState, coulombState } from '../sim/engine.js'
 import { registry } from '../sim/registry.js'
 import { snapToPin, snapJunction, CIRCUIT_TYPES, pins } from '../sim/circuit.js'
 
@@ -83,7 +83,9 @@ export function useSim() {
     const reg = registry[type]
     if (!reg) return null
     const p = { ...reg.defaults(), ...props }
-    if (angle) p.angle = angle
+    // angle 入参是弧度（刚体用），props.angle 一律存角度（Inspector 滑杆、斜面吸附、
+    // 撤销快照都按度数读写）——这里统一换算，避免斜面吸附 / 撤销后角度被当成度数写回
+    if (angle) p.angle = (angle * 180) / Math.PI
     const obj = { id: explicitId ?? nextId++, type, props: p, x, y, angle, body: null, home: { x, y, angle } }
     if (explicitId != null && explicitId >= nextId) nextId = explicitId + 1
     // 绳 / 弹簧 / 滑轮 / 单摆：放置时记住最近的两个动态物体作为两端
@@ -97,6 +99,8 @@ export function useSim() {
       if (near.length === 2) { p._a = near[0].o.id; p._b = near[1].o.id }
       else if (near.length === 1) { p._a = near[0].o.id }
     }
+    // 记下「刚放置时」的完整参数：重置时极板 U 这类可被模拟改写的参数要还原成放置值
+    obj.init = { ...p }
     const engine = ensureWorld()
     const body = makeBody(obj)
     if (body) { Matter.Composite.add(engine.world, body); obj.body = body; applyV0(obj) }
@@ -171,6 +175,7 @@ export function useSim() {
     const now = Date.now()
     if (now - lastPropRef.current > 800) { pushHistory(); lastPropRef.current = now }
     const prevLen = o.props.len
+    let geoShift = null      // 改长度导致中心平移时，重建刚体要用的新中心
     if (o.props._par && (key === 'len' || key === 'angle')) delete o.props._par
     o.props[key] = value
     // 线段元件调长度：若某端已吸附到其他端子，则保持该端不动，沿另一端伸长
@@ -204,6 +209,9 @@ export function useSim() {
         o.x += keep * ux * (L0 - value) / 2
         o.y += keep * uy * (L0 - value) / 2
         if (o.home) { o.home.x = o.x; o.home.y = o.y }
+        // 有刚体的元件（金属棒等）：中心平移量要落到 body 上，否则重建刚体时
+        // 仍用旧 body.position，画面上「依附端」并没有真的固定住
+        if (o.body) geoShift = { x: o.x, y: o.y }
       }
       // 两端都依附或都自由 → 居中伸长，不做特殊处理
     }
@@ -224,7 +232,8 @@ export function useSim() {
       else {
         // 几何参数变化 → 重建刚体（保留位置/速度，避免形状改了但碰撞体没变）
         const engine = engineRef.current
-        const pos = { ...o.body.position }, vel = { ...o.body.velocity }, av = o.body.angularVelocity, ang = o.body.angle
+        const pos = geoShift ? { x: geoShift.x, y: geoShift.y } : { ...o.body.position }
+        const vel = { ...o.body.velocity }, av = o.body.angularVelocity, ang = o.body.angle
         Matter.Composite.remove(engine.world, o.body)
         const nb = makeBody({ ...o, x: pos.x, y: pos.y })
         if (nb) {
@@ -235,6 +244,7 @@ export function useSim() {
           Matter.Body.setAngularVelocity(nb, av)
           Matter.Composite.add(engine.world, nb)
           o.body = nb
+          if (geoShift) { o.x = pos.x; o.y = pos.y; if (o.home) { o.home.x = pos.x; o.home.y = pos.y } }
         } else o.body = null
       }
     }
@@ -242,9 +252,13 @@ export function useSim() {
   }, [])
 
   // 拖拽：直接设位置并清零速度（不切换 static，避免质量/速度丢失）
+  const dragIdRef = useRef(null)
+  const endDrag = useCallback(() => { dragIdRef.current = null }, [])
   const dragTo = useCallback((id, x, y) => {
     const o = objsRef.current.find(o => o.id === id)
     if (!o) return
+    // 一次手势只记一次历史：以「按下前」的状态作为撤销点（原来拖拽完全不可撤销）
+    if (dragIdRef.current !== id) { pushHistory(); dragIdRef.current = id }
     // 改动并联态元件（拖动/改尺寸）→ 视为解除并联，恢复普通形态
     if (o.props._par) delete o.props._par
     // 电路线段元件：拖动时若附近（26px）有其他端子，则平移使该端子精确对齐（保持连接不断）
@@ -302,6 +316,9 @@ export function useSim() {
 
   const reset = useCallback(() => {
     timeRef.current = 0; setTime(0)
+    // 先清运行时状态（电容电压、极板电荷、电荷被 setStatic 钉住、回旋相位、电子枪计时…），
+    // 再回位——否则「重置」只是把物体搬回原点，物理状态还停在上一次运行的结果上
+    resetRuntime(objsRef.current)
     for (const o of objsRef.current) {
       const b = o.body
       if (!b) { o.x = o.home.x; o.y = o.home.y; continue }
@@ -411,7 +428,7 @@ export function useSim() {
   }, [])
 
   return {
-    add, remove, update, dragTo, getObject, loadScene, reset, clear, undo, redo,
+    add, remove, update, dragTo, endDrag, getObject, loadScene, reset, clear, undo, redo,
     canUndo: historyRef.current.length > 0,
     canRedo: futureRef.current.length > 0,
     histVer,
