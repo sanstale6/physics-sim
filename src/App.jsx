@@ -119,6 +119,12 @@ export default function App() {
   }, [sim.undo, sim.redo, sim.remove, sim.setRunning, sim.running, selected, pickTool])
 
   const sel = selected != null ? sim.getObject(selected) : null
+
+  // 撤销/重做/清空可能把「正被选中的元件」删掉：此时 Inspector 已是空壳，
+  // 但 showInspector 还开着 → 留下一个透明 backdrop 挡住画布点击。这里自动收起。
+  useEffect(() => {
+    if (selected != null && !sim.getObject(selected)) { setSelected(null); setShowInspector(false) }
+  }, [selected, sim.histVer, sim.count])
   const selBody = selected != null ? sim.objsRef.current.find(o => o.id === selected)?.body : null
 
   return (
@@ -142,6 +148,19 @@ export default function App() {
             onPlace={place} onPick={pick} onTap={pick}
             onSelectEmpty={() => setShowInspector(false)}
             selectedId={selected} showForces={showForces} showB={showB} />
+          {sim.count === 0 && !sim.running && tool === 'select' && (
+            <div className="empty-hint">
+              <div className="eh-title">画布是空的</div>
+              <div className="eh-body">
+                从下方元件栏挑一个元件，点画布放置；也可以直接看一个现成的真题演示：
+              </div>
+              <div className="eh-chips">
+                {['平抛运动', '斜面滑动', '带电粒子圆周', '电容充放电'].map(n => (
+                  <button key={n} onPointerDown={e => { e.preventDefault(); loadPreset(n) }}>{n}</button>
+                ))}
+              </div>
+            </div>
+          )}
           <DataPanel body={selBody} time={sim.time} running={sim.running} />
         </div>
           {showInspector && <button className="backdrop" aria-label="关闭属性面板" onClick={() => setShowInspector(false)} />}
@@ -152,7 +171,7 @@ export default function App() {
       </div>
       <Pallete tool={tool} onPick={pickTool} onLoadPreset={loadPreset} />
       <SceneIO sim={sim} onClose={() => {}} />
-      <StatusBar sim={sim} />
+      <StatusBar sim={sim} tool={tool} />
       <Help open={showHelp} onClose={() => setShowHelp(false)} />
       {toast && <div className="toast">{toast}</div>}
     </div>

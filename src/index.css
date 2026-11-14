@@ -276,3 +276,13 @@ button.block-btn{width:100%;margin-top:.6rem}
 @media (pointer:coarse){
   .insp-close{min-height:44px;min-width:44px;font-size:1.05rem;margin:-.2rem -.25rem -.2rem 0}
 }
+
+/* 空画布引导：只在 0 元件且未运行时出现，点画布任意位置即消失 */
+.empty-hint{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:min(78%,340px);
+  text-align:center;pointer-events:none;color:var(--muted);line-height:1.5}
+.empty-hint .eh-title{color:var(--fg);font-size:1rem;font-weight:600;margin-bottom:6px}
+.empty-hint .eh-body{font-size:.78rem}
+.empty-hint .eh-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px;pointer-events:auto}
+.empty-hint .eh-chips button{font-size:.74rem;padding:6px 10px;border-radius:999px;
+  background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);color:var(--fg);cursor:pointer}
+.empty-hint .eh-chips button:hover{background:rgba(56,189,248,.22)}
