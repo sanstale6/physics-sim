@@ -357,7 +357,6 @@ export default function SimCanvas(props) {
         if (sel) drawForceAnalysis(ctx, sel, objs)
       }
 
-      if (!P.current.sim.objsRef.current.length) drawEmptyHint(ctx, w, h)
       drawScaleBar(ctx, w, h, view.scale)
 
       // 放置预览（鼠标悬停时）
@@ -420,18 +419,6 @@ function triPath(ctx, g) {
 
 // 斜面：真题里的直角三角形 + θ 角标
 // 比例尺：100px = 1m（屏幕空间绘制，底部居中）
-function drawEmptyHint(ctx, w, h) {
-  ctx.save()
-  ctx.textAlign = 'center'
-  ctx.fillStyle = 'rgba(219,230,245,.55)'
-  ctx.font = '600 15px system-ui'
-  ctx.fillText('从下方元件栏选一个元件，点在画布上放置', w / 2, h / 2 - 8)
-  ctx.fillStyle = 'rgba(148,163,184,.6)'
-  ctx.font = '13px system-ui'
-  ctx.fillText('或点 📖 真题预设 载入一道题的整套装置（可拖动、可调参）', w / 2, h / 2 + 18)
-  ctx.restore()
-}
-
 function drawScaleBar(ctx, w, h, scale) {
   const cands = [0.5, 1, 2, 5, 10]
   let m = 1

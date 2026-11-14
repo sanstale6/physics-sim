@@ -170,7 +170,7 @@ export default function App() {
           objs={sim.objsRef.current} />
       </div>
       <Pallete tool={tool} onPick={pickTool} onLoadPreset={loadPreset} />
-      <SceneIO sim={sim} onClose={() => {}} />
+      <SceneIO sim={sim} onClose={() => {}} onNotify={notify} />
       <StatusBar sim={sim} tool={tool} />
       <Help open={showHelp} onClose={() => setShowHelp(false)} />
       {toast && <div className="toast">{toast}</div>}

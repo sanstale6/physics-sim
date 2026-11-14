@@ -286,3 +286,8 @@ button.block-btn{width:100%;margin-top:.6rem}
 .empty-hint .eh-chips button{font-size:.74rem;padding:6px 10px;border-radius:999px;
   background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);color:var(--fg);cursor:pointer}
 .empty-hint .eh-chips button:hover{background:rgba(56,189,248,.22)}
+
+/* 存场景的内联命名框（替代阻塞式 prompt） */
+.sceneio .savebox{display:inline-flex;gap:.3rem;align-items:center}
+.sceneio .savebox input{font-size:.76rem;min-height:30px;padding:.15rem .45rem;width:8.5em;
+  background:rgba(15,23,42,.8);border:1px solid rgba(56,189,248,.35);border-radius:8px;color:var(--fg)}

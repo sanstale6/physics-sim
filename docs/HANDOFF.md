@@ -127,8 +127,14 @@ pnpm test           # 全链回归（22 个脚本，见下）
 - **元件栏分类 tab**（Pallete.jsx）：原来 39 个按钮挤在一条横向滚动条里，预设下拉被挤到看不见。现在四个 tab（力学/电磁/电路/光学 + 未分组进「其他」），只渲染当前分类；`useEffect` 跟随当前选中工具自动切 tab；≥1100px 宽屏用 CSS 撤销 tab、四组平铺（`@media (min-width:1100px){.pal-tabs{display:none}.pal-group.hidden{display:flex}}`）
 - **顶栏减负**（Toolbar.jsx）：受力/磁感线/重力/电荷力四个开关收进 `👁 显示` 弹出面板（.disp-menu，点外部或 Esc 收起）。角标只统计**偏离默认**的项（失重、忽略电荷力、关受力、关磁感线），默认状态顶栏干净
 - **Inspector 重复角度滑杆**（Inspector.jsx）：22 个元件的 fields 里本就有 angle，ROTATABLE 又额外渲染一个 → 两个角度滑杆。条件改为 `ROTATABLE.has(type) && !fields.some(f=>f.key==='angle')`
+- **空画布引导**（App.jsx `.empty-hint`）：0 元件且未运行时显示「画布是空的 + 四个快捷预设 chip」，点 chip 直接载入；放置模式（tool≠select）自动隐藏，避免挡住落点。原来画在 canvas 里的那版文案已删（与 DOM 版重复叠字）
+- **状态栏上下文提示**（StatusBar.jsx 接 `tool`）：放置模式显示「点击画布放置「物块」 · Esc 返回选择」，空场景提示去元件栏选，默认给手势说明
+- **撤销掉选中元件后属性面板变空壳**：Inspector 拿到 undefined 不渲染，但 `showInspector` 仍为 true → 留下透明 `.backdrop` 挡住画布点击。App 加 useEffect（依赖 selected / sim.histVer / sim.count）自动清选中并收起面板
+- **SceneIO 去阻塞**：`存场景` 从 `prompt/alert` 改为内联命名输入（Enter 存 / Esc 取消）+ toast 反馈；`分享链接` 走 clipboard → 隐藏 textarea+execCommand → 内联只读输入框三级降级，全程不弹系统对话框；JSON 解析失败也用 toast
+- **Help 面板补全**：重置语义、撤销粒度与快捷键、Delete、方向键微调、👁 显示面板、48 个预设、分类元件栏
+
 ### UI 验收记录（ego-browser 实测）
-1280px 无 tab 四组平铺；430px tab 正常切换；`.disp-menu` 展开正常；预设「电容充放电」运行 2.5s 后 P=0.03W，点重置 → ⏱0.00s、P 回到 3.20W（电容电压确实被清空）；拖拽物块后撤销按钮由 disabled 变可用并成功回退
+1280px 无 tab 四组平铺；430px tab 正常切换；`.disp-menu` 展开正常；预设「电容充放电」运行 2.5s 后 P=0.03W，点重置 → ⏱0.00s、P 回到 3.20W（电容电压确实被清空）；拖拽物块后撤销按钮由 disabled 变可用并成功回退；空画布引导 chip 点击后 4 元件载入、提示自动消失；状态栏提示随工具在「选择/放置」间切换；存场景内联命名写入 localStorage + toast「已保存场景：测试场景A」；分享链接降级路径（拦截 clipboard + execCommand）正确显示只读链接框
 
 ## 已知遗留 / 下一步建议
 - ~~磁铁调角度时可能与极性标注分离~~ 已修复：useSim.js 重建刚体时静态元件 setAngle 被清零，已统一传 ang
