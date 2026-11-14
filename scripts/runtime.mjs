@@ -123,6 +123,58 @@ if (railBtn2) {
 }
 const sb = doc.querySelector('.statusbar')
 console.log('statusbar:', sb ? sb.textContent.slice(0, 60) : 'N/A')
+
+// —— 第 22 轮 UI 断言：空画布引导 / 状态栏上下文提示 / 元件栏分类 tab ——
+let uiPass = 0, uiFail = 0
+const uiCheck = (name, ok) => { console.log((ok ? 'PASS ' : 'FAIL ') + name); ok ? uiPass++ : uiFail++ }
+
+// 清空 → 空画布引导应出现（DOM 版，带快捷预设 chip）
+// 注意：引导只在「选择」模式显示，前面测试把工具切到了金属棒，先切回来
+const selBtn0 = [...doc.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('选择'))
+if (selBtn0) selBtn0.click()
+await sleep(150)
+const clearBtn = [...doc.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('清空'))
+if (clearBtn) clearBtn.click()
+await sleep(250)
+const emptyHint = doc.querySelector('.empty-hint')
+uiCheck('空画布出现引导提示', !!emptyHint)
+uiCheck('引导里有快捷预设 chip', doc.querySelectorAll('.empty-hint .eh-chips button').length >= 3)
+
+// 选一个元件 → 提示隐藏、状态栏改为「点击画布放置…」
+const tabBtn = [...doc.querySelectorAll('.pal-tab')].find(b => b.textContent === '电路')
+uiCheck('元件栏有分类 tab', !!tabBtn)
+if (tabBtn) {
+  tabBtn.dispatchEvent(new win.MouseEvent('pointerdown', { bubbles: true }))
+  await sleep(120)
+  const visGroups = [...doc.querySelectorAll('.pal-group')].filter(g => g.className.indexOf('hidden') < 0)
+  uiCheck('切 tab 后只显示一个分组', visGroups.length === 1)
+  const batt = [...doc.querySelectorAll('.pallete button')].find(b => b.textContent.includes('电源'))
+  if (batt) {
+    batt.dispatchEvent(new win.MouseEvent('pointerdown', { bubbles: true }))
+    await sleep(150)
+    const hint = doc.querySelector('.statusbar .hint')
+    uiCheck('状态栏提示随工具变化', !!hint && hint.textContent.includes('点击画布放置'))
+    uiCheck('放置模式隐藏空画布引导', !doc.querySelector('.empty-hint'))
+    // 回到选择模式
+    const selBtn = [...doc.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('选择'))
+    if (selBtn) selBtn.click()
+    await sleep(120)
+  }
+}
+
+// 顶栏「显示」面板：默认无角标，能展开
+const dispBtn = [...doc.querySelectorAll('.toolbar button')].find(b => b.textContent.includes('显示'))
+uiCheck('顶栏有显示面板按钮', !!dispBtn)
+uiCheck('默认状态无角标', !!dispBtn && !dispBtn.textContent.includes('·'))
+if (dispBtn) {
+  dispBtn.click()
+  await sleep(150)
+  uiCheck('显示面板能展开', !!doc.querySelector('.disp-menu'))
+  dispBtn.click()
+  await sleep(120)
+}
+console.log(uiPass + ' ui pass, ' + uiFail + ' ui fail')
+if (uiFail) process.exit(1)
 process.exit(0)
 
 for (const e of errors.slice(0, 6)) console.log('---', e.split('\n').slice(0, 3).join(' | '))
