@@ -20,6 +20,9 @@ export default function DataPanel({ body, time, running }) {
 
     const v = body ? Math.hypot(body.velocity.x, body.velocity.y) * 0.6 : 0
     const d = dataRef.current
+    // 重置后 time 会回退到 0：此时旧样本的 t 都大于当前时间，曲线会画到画布外 / 出现折返，
+    // 因此时间一旦倒退就清空历史重新采样
+    if (time < lastRef.current) { d.length = 0; lastRef.current = -1 }
     if (running && body && Math.abs(time - lastRef.current) > 0.04) {
       lastRef.current = time
       d.push({ t: time, v })

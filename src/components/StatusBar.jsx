@@ -22,7 +22,7 @@ export default function StatusBar({ sim, tool = 'select' }) {
         </span>
       )}
       {!sim.gravity && <span className="warn">🪐 失重</span>}
-      <span className="hint">{hint}</span>
+      <span className={"hint" + (tool !== 'select' ? ' ctx' : '')}>{hint}</span>
     </footer>
   )
 }

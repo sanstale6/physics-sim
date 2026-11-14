@@ -188,7 +188,8 @@ button.block-btn{width:100%;margin-top:.6rem}
 }
 @media (max-width:560px){
   .topbar{padding:.35rem .5rem;gap:.4rem}
-  .topbar h1{font-size:.9rem}
+  /* 手机上标题占一整行太浪费高度，画布高度优先 */
+  .topbar h1{display:none}
   .toolbar button{min-height:38px;padding:.25rem .5rem;font-size:.78rem}
   .datapanel{width:min(60vw,212px)}
   .datapanel canvas{height:62px}
@@ -198,6 +199,8 @@ button.block-btn{width:100%;margin-top:.6rem}
   .pal-preset{max-width:40vw}
   .zoomctl{bottom:5.8rem}
   .statusbar .hint{display:none}
+  /* 放置模式的提示必须留在手机上（告诉用户点哪里、怎么退出），单行省略 */
+  .statusbar .hint.ctx{display:inline;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .inspector{width:min(82vw,286px)}
   .sceneio{padding:.3rem .4rem}
   .sceneio button{min-height:30px;font-size:.72rem}
@@ -223,6 +226,8 @@ button.block-btn{width:100%;margin-top:.6rem}
   .datapanel canvas{height:52px}
   .zoomctl{bottom:.4rem;right:.4rem;flex-direction:row}
   .statusbar .hint{display:none}
+  /* 放置模式的提示必须留在手机上（告诉用户点哪里、怎么退出），单行省略 */
+  .statusbar .hint.ctx{display:inline;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sceneio{display:none}
 }
 
