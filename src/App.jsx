@@ -167,7 +167,7 @@ export default function App() {
         <Inspector object={sel} onChange={(k, v) => sim.update(selected, k, v)}
           onDelete={() => { sim.remove(selected); setSelected(null); setShowInspector(false) }}
           open={showInspector} onClose={() => setShowInspector(false)} body={selBody}
-          objs={sim.objsRef.current} />
+          objs={sim.objsRef.current} rev={sim.epoch} />
       </div>
       <Pallete tool={tool} onPick={pickTool} onLoadPreset={loadPreset} />
       <SceneIO sim={sim} onClose={() => {}} onNotify={notify} />
